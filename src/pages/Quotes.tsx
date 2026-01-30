@@ -1,7 +1,6 @@
 /**
  * Quotes Page
- * Lists all quotes/orders with status, calculations, and actions
- * Shows FOB, CIF, and landed cost comparisons
+ * Lists all quotes/orders using Supabase with status, calculations, and actions
  */
 
 import React, { useState } from 'react';
@@ -20,6 +19,23 @@ import {
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge, CountryBadge, ContainerBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,51 +45,64 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { 
-  quotes, 
-  getSupplierById, 
-  getCatalogItemById,
-  getSupplierPrice
-} from '@/data/mockData';
-import { formatCurrency, calculateQuote, getLandedForDestination } from '@/lib/calculations';
-import type { Quote } from '@/types';
+  useQuotes, 
+  useClients,
+  useCreateQuote,
+  Quote
+} from '@/hooks/useSupabaseQuery';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatCurrency } from '@/lib/calculations';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function QuotesPage() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDialog, setShowDialog] = useState(false);
+  
+  // Form state for new quote
+  const [formData, setFormData] = useState({
+    name: '',
+    client_id: '',
+    destination_country: 'BR' as Quote['destination_country'],
+    container_type: '40HC' as Quote['container_type'],
+    freight_per_container_usd: 3500,
+    insurance_rate: 0.005,
+    fixed_costs_usd: 500,
+  });
+
+  const { data: quotes, isLoading: loadingQuotes } = useQuotes();
+  const { data: clients } = useClients();
+  const createQuote = useCreateQuote();
+  const { user } = useAuth();
 
   // Filter quotes by status
   const filteredQuotes = statusFilter === 'all'
     ? quotes
-    : quotes.filter(q => q.status === statusFilter);
+    : quotes?.filter(q => q.status === statusFilter);
 
-  // Calculate quote totals
-  const getQuoteTotals = (quote: Quote) => {
-    try {
-      const calc = calculateQuote(quote);
-      const landed = getLandedForDestination(calc, quote.destination_country);
-      return {
-        fob: calc.total_fob,
-        cif: calc.cif_total,
-        landed,
-        containers: calc.container_qty,
-        cbm: calc.total_cbm,
-      };
-    } catch {
-      // Fallback if calculation fails (missing data)
-      return {
-        fob: quote.lines.reduce((sum, line) => {
-          const price = getSupplierPrice(line.chosen_supplier_id, line.catalog_item_id);
-          return sum + (line.qty * (price?.price_fob_usd ?? 0));
-        }, 0),
-        cif: 0,
-        landed: 0,
-        containers: 1,
-        cbm: quote.lines.reduce((sum, line) => {
-          const item = getCatalogItemById(line.catalog_item_id);
-          return sum + (line.qty * (item?.unit_cbm ?? 0));
-        }, 0),
-      };
-    }
+  // Open dialog for new quote
+  const handleNew = () => {
+    setFormData({
+      name: '',
+      client_id: '',
+      destination_country: 'BR',
+      container_type: '40HC',
+      freight_per_container_usd: 3500,
+      insurance_rate: 0.005,
+      fixed_costs_usd: 500,
+    });
+    setShowDialog(true);
+  };
+
+  // Save quote
+  const handleSave = async () => {
+    await createQuote.mutateAsync({
+      ...formData,
+      client_id: formData.client_id || undefined,
+      status: 'draft',
+      created_by: user?.id,
+    });
+    setShowDialog(false);
   };
 
   // Table columns
@@ -85,12 +114,24 @@ export default function QuotesPage() {
         <div>
           <p className="font-medium text-foreground">{quote.name}</p>
           <p className="text-xs text-muted-foreground">
-            {quote.lines.length} item(s)
+            {new Date(quote.created_at).toLocaleDateString('pt-BR')}
           </p>
         </div>
       ),
       sortable: true,
       sortValue: (quote) => quote.name,
+    },
+    {
+      key: 'client',
+      header: 'Cliente',
+      accessor: (quote) => {
+        const client = clients?.find(c => c.id === quote.client_id);
+        return client ? (
+          <span className="text-sm">{client.name}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        );
+      },
     },
     {
       key: 'status',
@@ -111,68 +152,24 @@ export default function QuotesPage() {
     {
       key: 'container',
       header: 'Container',
-      accessor: (quote) => {
-        const totals = getQuoteTotals(quote);
-        return (
-          <div className="flex items-center gap-2">
-            <ContainerBadge type={quote.container_type} />
-            <span className="text-sm text-muted-foreground">
-              × {totals.containers}
-            </span>
-          </div>
-        );
-      },
+      accessor: (quote) => (
+        <ContainerBadge type={quote.container_type} />
+      ),
     },
     {
-      key: 'fob',
-      header: 'FOB Total',
-      accessor: (quote) => {
-        const totals = getQuoteTotals(quote);
-        return (
-          <span className="font-medium">{formatCurrency(totals.fob)}</span>
-        );
-      },
+      key: 'freight',
+      header: 'Frete/Cont.',
+      accessor: (quote) => (
+        <span className="font-medium">{formatCurrency(Number(quote.freight_per_container_usd))}</span>
+      ),
       sortable: true,
-      sortValue: (quote) => getQuoteTotals(quote).fob,
-      className: 'text-right',
-      headerClassName: 'text-right',
-    },
-    {
-      key: 'landed',
-      header: 'Landed',
-      accessor: (quote) => {
-        const totals = getQuoteTotals(quote);
-        return (
-          <div className="text-right">
-            <span className="font-medium">{formatCurrency(totals.landed)}</span>
-            <p className="text-xs text-muted-foreground">
-              {quote.destination_country}
-            </p>
-          </div>
-        );
-      },
-      sortable: true,
-      sortValue: (quote) => getQuoteTotals(quote).landed,
-      className: 'text-right',
-      headerClassName: 'text-right',
-    },
-    {
-      key: 'cbm',
-      header: 'CBM',
-      accessor: (quote) => {
-        const totals = getQuoteTotals(quote);
-        return (
-          <span className="text-sm">{totals.cbm.toFixed(2)} m³</span>
-        );
-      },
-      sortable: true,
-      sortValue: (quote) => getQuoteTotals(quote).cbm,
+      sortValue: (quote) => Number(quote.freight_per_container_usd),
       className: 'text-right',
       headerClassName: 'text-right',
     },
     {
       key: 'date',
-      header: 'Data',
+      header: 'Atualizado',
       accessor: (quote) => (
         <span className="text-sm text-muted-foreground">
           {new Date(quote.updated_at).toLocaleDateString('pt-BR')}
@@ -220,25 +217,37 @@ export default function QuotesPage() {
 
   // Search function
   const searchFn = (quote: Quote, query: string): boolean => {
+    const client = clients?.find(c => c.id === quote.client_id);
     return (
       quote.name.toLowerCase().includes(query) ||
       quote.status.toLowerCase().includes(query) ||
-      quote.destination_country.toLowerCase().includes(query)
+      quote.destination_country.toLowerCase().includes(query) ||
+      (client?.name.toLowerCase().includes(query) ?? false)
     );
   };
 
   // Status counts
   const statusCounts = {
-    all: quotes.length,
-    draft: quotes.filter(q => q.status === 'draft').length,
-    pending: quotes.filter(q => q.status === 'pending').length,
-    approved: quotes.filter(q => q.status === 'approved').length,
-    ordered: quotes.filter(q => q.status === 'ordered').length,
+    all: quotes?.length || 0,
+    draft: quotes?.filter(q => q.status === 'draft').length || 0,
+    pending: quotes?.filter(q => q.status === 'pending').length || 0,
+    approved: quotes?.filter(q => q.status === 'approved').length || 0,
+    ordered: quotes?.filter(q => q.status === 'ordered').length || 0,
   };
 
-  // Calculate summary stats
-  const totalFOB = quotes.reduce((sum, q) => sum + getQuoteTotals(q).fob, 0);
-  const totalContainers = quotes.reduce((sum, q) => sum + getQuoteTotals(q).containers, 0);
+  if (loadingQuotes) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -251,11 +260,11 @@ export default function QuotesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => navigate('/comparator')}>
             <Calculator className="w-4 h-4 mr-2" />
             Comparativo
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={handleNew}>
             <Plus className="w-4 h-4 mr-2" />
             Nova Cotação
           </Button>
@@ -271,29 +280,7 @@ export default function QuotesPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Pedidos</p>
-              <p className="text-xl font-bold">{quotes.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card rounded-lg border p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-success" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">FOB Total</p>
-              <p className="text-xl font-bold">{formatCurrency(totalFOB)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-card rounded-lg border p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
-              <Package className="w-5 h-5 text-info" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Contêineres</p>
-              <p className="text-xl font-bold">{totalContainers}</p>
+              <p className="text-xl font-bold">{quotes?.length || 0}</p>
             </div>
           </div>
         </div>
@@ -303,8 +290,30 @@ export default function QuotesPage() {
               <Calculator className="w-5 h-5 text-warning" />
             </div>
             <div>
+              <p className="text-sm text-muted-foreground">Rascunhos</p>
+              <p className="text-xl font-bold">{statusCounts.draft}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card rounded-lg border p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+              <Package className="w-5 h-5 text-info" />
+            </div>
+            <div>
               <p className="text-sm text-muted-foreground">Pendentes</p>
               <p className="text-xl font-bold">{statusCounts.pending}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-card rounded-lg border p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-success" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Aprovados</p>
+              <p className="text-xl font-bold">{statusCounts.approved}</p>
             </div>
           </div>
         </div>
@@ -338,7 +347,7 @@ export default function QuotesPage() {
 
       {/* Quotes table */}
       <DataTable
-        data={filteredQuotes}
+        data={filteredQuotes || []}
         columns={columns}
         searchable
         searchPlaceholder="Buscar cotação..."
@@ -348,6 +357,127 @@ export default function QuotesPage() {
         onRowClick={(quote) => navigate(`/quotes/${quote.id}`)}
         emptyMessage="Nenhuma cotação encontrada."
       />
+
+      {/* Create dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Cotação</DialogTitle>
+            <DialogDescription>
+              Crie uma nova cotação de importação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome da Cotação *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
+                placeholder="Ex: Pedido Academia XYZ - Jan 2025"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              <Select 
+                value={formData.client_id}
+                onValueChange={(v) => setFormData(f => ({ ...f, client_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um cliente..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients?.filter(c => c.is_active).map(client => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>País de Destino</Label>
+                <Select 
+                  value={formData.destination_country}
+                  onValueChange={(v) => setFormData(f => ({ ...f, destination_country: v as Quote['destination_country'] }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BR">🇧🇷 Brasil</SelectItem>
+                    <SelectItem value="AR">🇦🇷 Argentina</SelectItem>
+                    <SelectItem value="US">🇺🇸 Estados Unidos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de Container</Label>
+                <Select 
+                  value={formData.container_type}
+                  onValueChange={(v) => setFormData(f => ({ ...f, container_type: v as Quote['container_type'] }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20FT">20' (33 m³)</SelectItem>
+                    <SelectItem value="40FT">40' (67 m³)</SelectItem>
+                    <SelectItem value="40HC">40'HC (76 m³)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Frete/Container (USD)</Label>
+                <Input
+                  type="number"
+                  value={formData.freight_per_container_usd}
+                  onChange={(e) => setFormData(f => ({ ...f, freight_per_container_usd: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Custos Fixos (USD)</Label>
+                <Input
+                  type="number"
+                  value={formData.fixed_costs_usd}
+                  onChange={(e) => setFormData(f => ({ ...f, fixed_costs_usd: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Taxa de Seguro (%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={formData.insurance_rate * 100}
+                onChange={(e) => setFormData(f => ({ ...f, insurance_rate: (parseFloat(e.target.value) || 0) / 100 }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSave}
+              disabled={!formData.name || createQuote.isPending}
+            >
+              {createQuote.isPending ? 'Criando...' : 'Criar Cotação'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

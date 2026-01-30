@@ -1,7 +1,6 @@
 /**
  * Dashboard Page
- * Main overview with stats, charts, and alerts
- * Shows key metrics for the gym equipment trading business
+ * Main overview with stats, charts, and alerts using Supabase data
  */
 
 import React from 'react';
@@ -10,11 +9,12 @@ import {
   ShoppingCart, 
   Building2, 
   Package, 
-  AlertTriangle,
+  Users,
   DollarSign,
   Clock,
   TrendingUp,
-  Container
+  Container,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -33,14 +33,8 @@ import {
 } from 'recharts';
 import { StatsCard, AlertCard } from '@/components/dashboard/StatsCard';
 import { formatCurrency } from '@/lib/calculations';
-import { 
-  quotes, 
-  suppliers, 
-  catalogItems, 
-  skuMappings,
-  getActiveSuppliers,
-  getPendingMappings
-} from '@/data/mockData';
+import { useDashboardStats, useSuppliers, useSKUMappings } from '@/hooks/useSupabaseQuery';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Chart colors from design system
 const CHART_COLORS = {
@@ -55,41 +49,28 @@ const CHART_COLORS = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   
-  // Calculate stats from mock data
-  const activeSuppliers = getActiveSuppliers();
-  const pendingMappings = getPendingMappings();
-  const activeItems = catalogItems.filter(c => c.is_active);
-  
-  // Calculate total FOB value from all quotes
-  const totalFOB = quotes.reduce((sum, quote) => {
-    const quoteFOB = quote.lines.reduce((lineSum, line) => {
-      // Mock price lookup
-      return lineSum + (line.qty * 1500); // Simplified for demo
-    }, 0);
-    return sum + quoteFOB;
-  }, 0);
+  const { data: stats, isLoading: loadingStats } = useDashboardStats();
+  const { data: suppliers } = useSuppliers();
+  const { data: skuMappings } = useSKUMappings();
 
-  // Calculate average lead time
-  const avgLeadTime = Math.round(
-    activeSuppliers.reduce((sum, s) => sum + s.lead_time_days, 0) / activeSuppliers.length
-  );
+  // Calculate pending mappings
+  const pendingMappings = skuMappings?.filter(m => !m.catalog_item_id).length || 0;
 
-  // Data for FOB by destination chart
+  // Data for FOB by destination chart (mock data for visualization)
   const fobByDestination = [
     { country: 'Brasil', fob: 185000, landed: 308380, flag: '🇧🇷' },
     { country: 'Argentina', fob: 142000, landed: 256742, flag: '🇦🇷' },
     { country: 'EUA', fob: 89500, landed: 116439, flag: '🇺🇸' },
   ];
 
-  // Data for supplier ranking
-  const supplierRanking = [
-    { name: 'Guangzhou Elite', value: 35, color: CHART_COLORS.primary },
-    { name: 'Shandong Fitness', value: 28, color: CHART_COLORS.accent },
-    { name: 'Ningbo Iron', value: 22, color: CHART_COLORS.success },
-    { name: 'Zhejiang Pro', value: 15, color: CHART_COLORS.warning },
-  ];
+  // Data for supplier ranking (based on actual suppliers if available)
+  const supplierRanking = suppliers?.slice(0, 4).map((s, i) => ({
+    name: s.name.split(' ').slice(0, 2).join(' '),
+    value: 35 - (i * 8),
+    color: [CHART_COLORS.primary, CHART_COLORS.accent, CHART_COLORS.success, CHART_COLORS.warning][i],
+  })) || [];
 
-  // Monthly trend data
+  // Monthly trend data (mock)
   const monthlyTrend = [
     { month: 'Set', fob: 145000, orders: 4 },
     { month: 'Out', fob: 168000, orders: 5 },
@@ -98,6 +79,23 @@ export default function DashboardPage() {
     { month: 'Jan', fob: 235000, orders: 8 },
     { month: 'Fev', fob: 258000, orders: 6 },
   ];
+
+  if (loadingStats) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-80" />
+          <Skeleton className="h-80" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -111,49 +109,52 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Total de Pedidos"
-          value={quotes.length}
-          subtitle="2 pendentes de aprovação"
+          value={stats?.totalQuotes || 0}
+          subtitle={`${stats?.pendingQuotes || 0} pendentes de aprovação`}
           icon={ShoppingCart}
           trend={{ value: 12, isPositive: true }}
         />
         <StatsCard
           title="Fornecedores Ativos"
-          value={activeSuppliers.length}
-          subtitle={`${suppliers.length} cadastrados no total`}
+          value={stats?.activeSuppliers || 0}
+          subtitle={`${stats?.totalSuppliers || 0} cadastrados no total`}
           icon={Building2}
           variant="info"
         />
         <StatsCard
           title="SKUs no Catálogo"
-          value={activeItems.length}
+          value={stats?.catalogItems || 0}
           subtitle="Equipamentos de academia"
           icon={Package}
         />
         <StatsCard
-          title="Valor FOB Total"
-          value={formatCurrency(totalFOB)}
-          subtitle="Últimos 30 dias"
-          icon={DollarSign}
+          title="Clientes Ativos"
+          value={stats?.activeClients || 0}
+          subtitle={`${stats?.totalClients || 0} cadastrados`}
+          icon={Users}
           variant="success"
-          trend={{ value: 8.5, isPositive: true }}
         />
       </div>
 
       {/* Alerts section */}
-      {pendingMappings.length > 0 && (
+      {(pendingMappings > 0 || (stats?.draftQuotes || 0) > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AlertCard
-            title="SKU Mapping Pendente"
-            message="Existem códigos de fornecedor sem mapeamento no catálogo"
-            count={pendingMappings.length}
-            onClick={() => navigate('/sku-mapping')}
-          />
-          <AlertCard
-            title="Cotações em Rascunho"
-            message="Finalize as cotações para continuar o processo"
-            count={quotes.filter(q => q.status === 'draft').length}
-            onClick={() => navigate('/quotes')}
-          />
+          {pendingMappings > 0 && (
+            <AlertCard
+              title="SKU Mapping Pendente"
+              message="Existem códigos de fornecedor sem mapeamento no catálogo"
+              count={pendingMappings}
+              onClick={() => navigate('/sku-mapping')}
+            />
+          )}
+          {(stats?.draftQuotes || 0) > 0 && (
+            <AlertCard
+              title="Cotações em Rascunho"
+              message="Finalize as cotações para continuar o processo"
+              count={stats?.draftQuotes || 0}
+              onClick={() => navigate('/quotes')}
+            />
+          )}
         </div>
       )}
 
@@ -291,7 +292,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Lead Time Médio</p>
-            <p className="text-xl font-bold">{avgLeadTime} dias</p>
+            <p className="text-xl font-bold">{stats?.avgLeadTime || 0} dias</p>
           </div>
         </div>
         
@@ -300,8 +301,10 @@ export default function DashboardPage() {
             <Container className="w-6 h-6 text-success" />
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Contêineres este mês</p>
-            <p className="text-xl font-bold">4 × 40HC</p>
+            <p className="text-sm text-muted-foreground">Mappings Pendentes</p>
+            <p className={`text-xl font-bold ${pendingMappings > 0 ? 'text-destructive' : ''}`}>
+              {pendingMappings}
+            </p>
           </div>
         </div>
 

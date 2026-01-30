@@ -16,7 +16,9 @@ import {
   Menu,
   X,
   LogOut,
-  User
+  User,
+  Users,
+  Calculator
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,9 +35,11 @@ import {
 // Navigation items configuration
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/clients', label: 'Clientes', icon: Users },
   { path: '/catalog', label: 'Catálogo', icon: Package },
   { path: '/suppliers', label: 'Fornecedores', icon: Building2 },
   { path: '/sku-mapping', label: 'SKU Mapping', icon: Link2 },
+  { path: '/comparator', label: 'Comparador', icon: Calculator },
   { path: '/quotes', label: 'Pedidos', icon: ShoppingCart },
   { path: '/logistics', label: 'Logística', icon: Truck },
 ];
@@ -43,19 +47,22 @@ const navItems = [
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
   };
 
   const handleNavigation = (path: string) => {
     navigate(path);
     setMobileOpen(false);
   };
+
+  // Get display name from user email
+  const displayName = user?.email?.split('@')[0] || 'Usuário';
 
   return (
     <div className="min-h-screen bg-background flex w-full">
@@ -144,13 +151,15 @@ export default function AppLayout() {
                     <User className="w-4 h-4 text-sidebar-primary" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="text-sm font-medium truncate">{user?.name}</p>
-                    <p className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
+                    <p className="text-sm font-medium truncate">{displayName}</p>
+                    <p className="text-xs text-sidebar-foreground/60 truncate">
+                      {isAdmin ? 'Admin' : 'Usuário'}
+                    </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                <DropdownMenuLabel>{user?.email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                   <LogOut className="w-4 h-4 mr-2" />

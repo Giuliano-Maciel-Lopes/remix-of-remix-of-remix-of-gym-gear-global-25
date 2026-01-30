@@ -1,59 +1,31 @@
 /**
  * Authentication Context for the Gym Equipment Trading System
- * Mock authentication - any credentials work
+ * Uses Supabase Auth for real authentication
  */
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: 'admin' | 'user';
-}
+import React, { createContext, useContext } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
+  loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  isAdmin: boolean;
+  userRole: 'admin' | 'user' | null;
+  signUp: (email: string, password: string) => Promise<{ data: any; error: any }>;
+  signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
+  signOut: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-
-  // Mock login - any credentials work
-  const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Mock user based on email
-    const mockUser: User = {
-      id: 'user-001',
-      email: email,
-      name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      role: 'admin',
-    };
-    
-    setUser(mockUser);
-    return true;
-  }, []);
-
-  const logout = useCallback(() => {
-    setUser(null);
-  }, []);
+  const auth = useSupabaseAuth();
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        isAuthenticated: !!user, 
-        login, 
-        logout 
-      }}
-    >
+    <AuthContext.Provider value={auth}>
       {children}
     </AuthContext.Provider>
   );
