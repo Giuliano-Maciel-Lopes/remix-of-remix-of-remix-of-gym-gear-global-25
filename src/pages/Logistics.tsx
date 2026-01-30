@@ -1,6 +1,6 @@
 /**
  * Logistics Page
- * Container estimation, CBM calculations, and shipment overview
+ * Container estimation, CBM calculations using Supabase data
  */
 
 import React, { useState } from 'react';
@@ -24,9 +24,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ContainerBadge, CountryBadge } from '@/components/common/StatusBadge';
-import { quotes } from '@/data/mockData';
-import { formatNumber, formatCurrency, calculateQuote, containerUtilization } from '@/lib/calculations';
-import type { ContainerType } from '@/types';
+import { useQuotes } from '@/hooks/useSupabaseQuery';
+import { formatNumber, formatCurrency } from '@/lib/calculations';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Container specifications
 const containerSpecs = {
@@ -35,20 +35,38 @@ const containerSpecs = {
   '40HC': { cbm: 76, length: '12.03m', width: '2.44m', height: '2.89m', maxWeight: 28000 },
 };
 
+type ContainerType = '20FT' | '40FT' | '40HC';
+
 export default function LogisticsPage() {
   // CBM Calculator state
   const [calcCBM, setCalcCBM] = useState<number>(0);
   const [selectedContainer, setSelectedContainer] = useState<ContainerType>('40HC');
   const [overrideQty, setOverrideQty] = useState<string>('');
 
+  const { data: quotes, isLoading } = useQuotes();
+
   // Get active shipments from quotes
-  const activeQuotes = quotes.filter(q => q.status === 'approved' || q.status === 'ordered');
+  const activeQuotes = quotes?.filter(q => q.status === 'approved' || q.status === 'ordered') || [];
 
   // Calculate container needs
   const containerCapacity = containerSpecs[selectedContainer].cbm;
   const estimatedContainers = Math.ceil(calcCBM / containerCapacity);
   const actualContainers = overrideQty ? parseInt(overrideQty) : estimatedContainers;
   const utilization = calcCBM > 0 ? (calcCBM / (actualContainers * containerCapacity)) * 100 : 0;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-48" />
+          ))}
+        </div>
+        <Skeleton className="h-64" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -255,57 +273,35 @@ export default function LogisticsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pedido</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Destino</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Container</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">CBM</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Peso</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Utilização</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">FOB</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Frete/Cont.</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Data</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {activeQuotes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum embarque ativo no momento
                   </td>
                 </tr>
               ) : (
-                activeQuotes.map((quote) => {
-                  const calc = calculateQuote(quote);
-                  const util = containerUtilization(calc.total_cbm, quote.container_type);
-                  
-                  return (
-                    <tr key={quote.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{quote.name}</td>
-                      <td className="px-4 py-3">
-                        <CountryBadge country={quote.destination_country} />
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <ContainerBadge type={quote.container_type} />
-                          <span className="text-sm">× {calc.container_qty}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">{formatNumber(calc.total_cbm, 2)} m³</td>
-                      <td className="px-4 py-3 text-right">{formatNumber(calc.total_weight, 0)} kg</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${
-                                util > 90 ? 'bg-success' : util > 70 ? 'bg-warning' : 'bg-destructive'
-                              }`}
-                              style={{ width: `${Math.min(util, 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground">{formatNumber(util, 0)}%</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {formatCurrency(calc.total_fob)}
-                      </td>
-                    </tr>
-                  );
-                })
+                activeQuotes.map((quote) => (
+                  <tr key={quote.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium">{quote.name}</td>
+                    <td className="px-4 py-3">
+                      <CountryBadge country={quote.destination_country} />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <ContainerBadge type={quote.container_type} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      {formatCurrency(Number(quote.freight_per_container_usd))}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-muted-foreground">
+                      {new Date(quote.updated_at).toLocaleDateString('pt-BR')}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

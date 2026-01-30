@@ -14,16 +14,406 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      catalog_items: {
+        Row: {
+          category: Database["public"]["Enums"]["equipment_category"]
+          created_at: string
+          description: string | null
+          hs_code: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          ncm_code: string | null
+          sku: string
+          unit_cbm: number
+          unit_weight_kg: number
+          updated_at: string
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["equipment_category"]
+          created_at?: string
+          description?: string | null
+          hs_code?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name: string
+          ncm_code?: string | null
+          sku: string
+          unit_cbm?: number
+          unit_weight_kg?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["equipment_category"]
+          created_at?: string
+          description?: string | null
+          hs_code?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name?: string
+          ncm_code?: string | null
+          sku?: string
+          unit_cbm?: number
+          unit_weight_kg?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          country: string
+          created_at: string
+          default_currency: Database["public"]["Enums"]["currency_type"]
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          country?: string
+          created_at?: string
+          default_currency?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          country?: string
+          created_at?: string
+          default_currency?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      quote_lines: {
+        Row: {
+          catalog_item_id: string
+          chosen_supplier_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          override_price_fob_usd: number | null
+          qty: number
+          quote_id: string
+          updated_at: string
+        }
+        Insert: {
+          catalog_item_id: string
+          chosen_supplier_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          override_price_fob_usd?: number | null
+          qty?: number
+          quote_id: string
+          updated_at?: string
+        }
+        Update: {
+          catalog_item_id?: string
+          chosen_supplier_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          override_price_fob_usd?: number | null
+          qty?: number
+          quote_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_lines_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_lines_chosen_supplier_id_fkey"
+            columns: ["chosen_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_lines_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          client_id: string | null
+          container_qty_override: number | null
+          container_type: Database["public"]["Enums"]["container_type"]
+          created_at: string
+          created_by: string | null
+          destination_country: Database["public"]["Enums"]["destination_country"]
+          fixed_costs_usd: number
+          freight_per_container_usd: number
+          id: string
+          insurance_rate: number
+          name: string
+          notes: string | null
+          status: Database["public"]["Enums"]["quote_status"]
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          container_qty_override?: number | null
+          container_type?: Database["public"]["Enums"]["container_type"]
+          created_at?: string
+          created_by?: string | null
+          destination_country?: Database["public"]["Enums"]["destination_country"]
+          fixed_costs_usd?: number
+          freight_per_container_usd?: number
+          id?: string
+          insurance_rate?: number
+          name: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          container_qty_override?: number | null
+          container_type?: Database["public"]["Enums"]["container_type"]
+          created_at?: string
+          created_by?: string | null
+          destination_country?: Database["public"]["Enums"]["destination_country"]
+          fixed_costs_usd?: number
+          freight_per_container_usd?: number
+          id?: string
+          insurance_rate?: number
+          name?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sku_mapping: {
+        Row: {
+          catalog_item_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          supplier_id: string
+          supplier_model_code: string
+          updated_at: string
+        }
+        Insert: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          supplier_id: string
+          supplier_model_code: string
+          updated_at?: string
+        }
+        Update: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          supplier_id?: string
+          supplier_model_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sku_mapping_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sku_mapping_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_prices: {
+        Row: {
+          catalog_item_id: string
+          created_at: string
+          currency_original: Database["public"]["Enums"]["currency_type"]
+          id: string
+          moq: number | null
+          price_fob_usd: number
+          price_original: number
+          supplier_id: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          catalog_item_id: string
+          created_at?: string
+          currency_original?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          moq?: number | null
+          price_fob_usd: number
+          price_original: number
+          supplier_id: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          catalog_item_id?: string
+          created_at?: string
+          currency_original?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          moq?: number | null
+          price_fob_usd?: number
+          price_original?: number
+          supplier_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_prices_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_prices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          country: string
+          created_at: string
+          default_currency: Database["public"]["Enums"]["currency_type"]
+          id: string
+          incoterm_default: Database["public"]["Enums"]["incoterm_type"]
+          is_active: boolean
+          lead_time_days: number
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          country?: string
+          created_at?: string
+          default_currency?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          incoterm_default?: Database["public"]["Enums"]["incoterm_type"]
+          is_active?: boolean
+          lead_time_days?: number
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          country?: string
+          created_at?: string
+          default_currency?: Database["public"]["Enums"]["currency_type"]
+          id?: string
+          incoterm_default?: Database["public"]["Enums"]["incoterm_type"]
+          is_active?: boolean
+          lead_time_days?: number
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      container_type: "20FT" | "40FT" | "40HC"
+      currency_type: "USD" | "CNY" | "EUR" | "BRL" | "ARS"
+      destination_country: "US" | "AR" | "BR"
+      equipment_category:
+        | "Cardio"
+        | "Strength"
+        | "Free Weights"
+        | "Benches"
+        | "Accessories"
+        | "Functional"
+      incoterm_type: "FOB" | "CIF" | "EXW" | "DDP"
+      quote_status: "draft" | "pending" | "approved" | "ordered" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +540,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      container_type: ["20FT", "40FT", "40HC"],
+      currency_type: ["USD", "CNY", "EUR", "BRL", "ARS"],
+      destination_country: ["US", "AR", "BR"],
+      equipment_category: [
+        "Cardio",
+        "Strength",
+        "Free Weights",
+        "Benches",
+        "Accessories",
+        "Functional",
+      ],
+      incoterm_type: ["FOB", "CIF", "EXW", "DDP"],
+      quote_status: ["draft", "pending", "approved", "ordered", "cancelled"],
+    },
   },
 } as const

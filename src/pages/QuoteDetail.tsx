@@ -1,10 +1,9 @@
 /**
  * Quote Detail Page
- * Shows complete quote breakdown with calculations
- * Includes supplier comparison and landed cost analysis
+ * Shows complete quote breakdown with calculations using Supabase
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -19,32 +18,98 @@ import {
   DollarSign,
   Truck,
   Building2,
-  Clock
+  Clock,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, CountryBadge, ContainerBadge, CategoryBadge } from '@/components/common/StatusBadge';
 import { 
-  quotes, 
-  getSupplierById, 
-  getCatalogItemById,
-  getSupplierPrice,
-  getPricesForCatalogItem 
-} from '@/data/mockData';
+  useQuoteWithLines,
+  useCatalogItems,
+  useSuppliers,
+  useSupplierPrices,
+  useCreateQuoteLine,
+  useDeleteQuoteLine,
+  useUpdateQuote
+} from '@/hooks/useSupabaseQuery';
 import { 
   formatCurrency, 
-  formatNumber, 
-  calculateQuote, 
-  percentDifference,
-  containerUtilization 
+  formatNumber
 } from '@/lib/calculations';
-import type { Quote, QuoteLine } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Container capacities
+const CONTAINER_CBM = {
+  '20FT': 33,
+  '40FT': 67,
+  '40HC': 76,
+};
+
+// Duty rates
+const DUTY_RATES = {
+  US: 0.301,
+  AR_STANDARD: 0.8081,
+  AR_SIMPLIFIED: 0.51,
+  BR: 0.668,
+};
 
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+  
+  const [showAddLineDialog, setShowAddLineDialog] = useState(false);
+  const [lineFormData, setLineFormData] = useState({
+    catalog_item_id: '',
+    chosen_supplier_id: '',
+    qty: 1,
+    override_price_fob_usd: '',
+  });
 
-  // Find the quote
-  const quote = quotes.find(q => q.id === id);
+  const { data: quoteData, isLoading: loadingQuote } = useQuoteWithLines(id || '');
+  const { data: catalogItems } = useCatalogItems();
+  const { data: suppliers } = useSuppliers();
+  const { data: prices } = useSupplierPrices();
+  
+  const createLine = useCreateQuoteLine();
+  const deleteLine = useDeleteQuoteLine();
+  const updateQuote = useUpdateQuote();
+
+  if (loadingQuote) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  const quote = quoteData?.quote;
+  const lines = quoteData?.lines || [];
 
   if (!quote) {
     return (
@@ -58,39 +123,111 @@ export default function QuoteDetailPage() {
     );
   }
 
-  // Calculate quote totals
-  const calc = calculateQuote(quote);
+  // Calculate totals
+  const calculateTotals = () => {
+    let totalFOB = 0;
+    let totalCBM = 0;
+    let totalWeight = 0;
 
-  // Get line item details
-  const getLineDetails = (line: QuoteLine) => {
-    const catalogItem = getCatalogItemById(line.catalog_item_id);
-    const supplier = getSupplierById(line.chosen_supplier_id);
-    const price = getSupplierPrice(line.chosen_supplier_id, line.catalog_item_id);
-    const allPrices = getPricesForCatalogItem(line.catalog_item_id);
+    for (const line of lines) {
+      const catalogItem = catalogItems?.find(c => c.id === line.catalog_item_id);
+      const price = prices?.find(p => 
+        p.supplier_id === line.chosen_supplier_id && 
+        p.catalog_item_id === line.catalog_item_id
+      );
+      
+      const fobUnit = Number(line.override_price_fob_usd) || Number(price?.price_fob_usd) || 0;
+      totalFOB += line.qty * fobUnit;
+      totalCBM += line.qty * Number(catalogItem?.unit_cbm || 0);
+      totalWeight += line.qty * Number(catalogItem?.unit_weight_kg || 0);
+    }
+
+    const containerCapacity = CONTAINER_CBM[quote.container_type];
+    const containerQty = quote.container_qty_override || Math.ceil(totalCBM / containerCapacity);
     
-    const fobUnit = line.override_price_fob_usd ?? price?.price_fob_usd ?? 0;
-    const fobTotal = line.qty * fobUnit;
-    const cbmTotal = line.qty * (catalogItem?.unit_cbm ?? 0);
-    const weightTotal = line.qty * (catalogItem?.unit_weight_kg ?? 0);
+    const freightTotal = containerQty * Number(quote.freight_per_container_usd);
+    const insuranceTotal = (totalFOB + freightTotal) * Number(quote.insurance_rate);
+    const cifTotal = totalFOB + freightTotal + insuranceTotal;
     
-    // Find best price for comparison
-    const bestPrice = Math.min(...allPrices.map(p => p.price_fob_usd));
-    const priceDiff = percentDifference(fobUnit, bestPrice);
-    
+    const landedUS = cifTotal * (1 + DUTY_RATES.US) + Number(quote.fixed_costs_usd);
+    const landedARStandard = cifTotal * (1 + DUTY_RATES.AR_STANDARD) + Number(quote.fixed_costs_usd);
+    const landedARSimplified = cifTotal * (1 + DUTY_RATES.AR_SIMPLIFIED) + Number(quote.fixed_costs_usd);
+    const landedBR = cifTotal * (1 + DUTY_RATES.BR) + Number(quote.fixed_costs_usd);
+
     return {
-      catalogItem,
-      supplier,
-      fobUnit,
-      fobTotal,
-      cbmTotal,
-      weightTotal,
-      priceDiff,
-      isBestPrice: fobUnit === bestPrice,
+      totalFOB,
+      totalCBM,
+      totalWeight,
+      containerQty,
+      freightTotal,
+      insuranceTotal,
+      cifTotal,
+      landedUS,
+      landedARStandard,
+      landedARSimplified,
+      landedBR,
     };
   };
 
+  const calc = calculateTotals();
+  
   // Container utilization
-  const utilization = containerUtilization(calc.total_cbm, quote.container_type);
+  const containerCapacity = CONTAINER_CBM[quote.container_type];
+  const utilization = calc.totalCBM > 0 
+    ? (calc.totalCBM / (calc.containerQty * containerCapacity)) * 100 
+    : 0;
+
+  // Add line to quote
+  const handleAddLine = async () => {
+    await createLine.mutateAsync({
+      quote_id: quote.id,
+      catalog_item_id: lineFormData.catalog_item_id,
+      chosen_supplier_id: lineFormData.chosen_supplier_id,
+      qty: lineFormData.qty,
+      override_price_fob_usd: lineFormData.override_price_fob_usd 
+        ? parseFloat(lineFormData.override_price_fob_usd) 
+        : undefined,
+    });
+    setShowAddLineDialog(false);
+    setLineFormData({
+      catalog_item_id: '',
+      chosen_supplier_id: '',
+      qty: 1,
+      override_price_fob_usd: '',
+    });
+  };
+
+  // Delete line
+  const handleDeleteLine = async (lineId: string) => {
+    await deleteLine.mutateAsync({ id: lineId, quoteId: quote.id });
+  };
+
+  // Update quote status
+  const handleUpdateStatus = async (status: typeof quote.status) => {
+    await updateQuote.mutateAsync({ id: quote.id, status });
+  };
+
+  // Get line details
+  const getLineDetails = (line: typeof lines[0]) => {
+    const catalogItem = catalogItems?.find(c => c.id === line.catalog_item_id);
+    const supplier = suppliers?.find(s => s.id === line.chosen_supplier_id);
+    const price = prices?.find(p => 
+      p.supplier_id === line.chosen_supplier_id && 
+      p.catalog_item_id === line.catalog_item_id
+    );
+    
+    const fobUnit = Number(line.override_price_fob_usd) || Number(price?.price_fob_usd) || 0;
+    const fobTotal = line.qty * fobUnit;
+    const cbmTotal = line.qty * Number(catalogItem?.unit_cbm || 0);
+    const weightTotal = line.qty * Number(catalogItem?.unit_weight_kg || 0);
+
+    return { catalogItem, supplier, fobUnit, fobTotal, cbmTotal, weightTotal };
+  };
+
+  // Get prices for selected catalog item
+  const getPricesForItem = (catalogItemId: string) => {
+    return prices?.filter(p => p.catalog_item_id === catalogItemId) || [];
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -110,15 +247,22 @@ export default function QuoteDetailPage() {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Edit className="w-4 h-4 mr-2" />
-            Editar
-          </Button>
-          <Button variant="outline" size="sm">
-            <Copy className="w-4 h-4 mr-2" />
-            Duplicar
-          </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && quote.status === 'draft' && (
+            <Button variant="outline" size="sm" onClick={() => handleUpdateStatus('pending')}>
+              Enviar para Aprovação
+            </Button>
+          )}
+          {isAdmin && quote.status === 'pending' && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => handleUpdateStatus('approved')}>
+                Aprovar
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handleUpdateStatus('draft')}>
+                Voltar para Rascunho
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm">
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             Google Sheet
@@ -137,9 +281,9 @@ export default function QuoteDetailPage() {
             <Package className="w-4 h-4" />
             <span className="text-xs uppercase">FOB Total</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.total_fob)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(calc.totalFOB)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {quote.lines.length} item(s) × {quote.lines.reduce((s, l) => s + l.qty, 0)} unid.
+            {lines.length} item(s)
           </p>
         </div>
         
@@ -148,9 +292,9 @@ export default function QuoteDetailPage() {
             <Ship className="w-4 h-4" />
             <span className="text-xs uppercase">Frete</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.freight_total)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(calc.freightTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {calc.container_qty} × {formatCurrency(quote.freight_per_container_usd)}/cont.
+            {calc.containerQty} × {formatCurrency(Number(quote.freight_per_container_usd))}/cont.
           </p>
         </div>
         
@@ -159,9 +303,9 @@ export default function QuoteDetailPage() {
             <Shield className="w-4 h-4" />
             <span className="text-xs uppercase">Seguro</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.insurance_total)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(calc.insuranceTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {(quote.insurance_rate * 100).toFixed(2)}% do FOB+Frete
+            {(Number(quote.insurance_rate) * 100).toFixed(2)}% do FOB+Frete
           </p>
         </div>
         
@@ -170,7 +314,7 @@ export default function QuoteDetailPage() {
             <DollarSign className="w-4 h-4" />
             <span className="text-xs uppercase">CIF Total</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.cif_total)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(calc.cifTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             FOB + Frete + Seguro
           </p>
@@ -184,14 +328,14 @@ export default function QuoteDetailPage() {
           <p className="text-2xl font-bold">
             {formatCurrency(
               quote.destination_country === 'AR' 
-                ? calc.landed_ar_standard 
+                ? calc.landedARStandard 
                 : quote.destination_country === 'BR' 
-                  ? calc.landed_br 
-                  : calc.landed_us
+                  ? calc.landedBR 
+                  : calc.landedUS
             )}
           </p>
           <p className="text-xs opacity-80 mt-1">
-            + {formatCurrency(quote.fixed_costs_usd)} custos fixos
+            + {formatCurrency(Number(quote.fixed_costs_usd))} custos fixos
           </p>
         </div>
       </div>
@@ -204,11 +348,11 @@ export default function QuoteDetailPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">CBM Total</span>
-              <span className="font-medium">{formatNumber(calc.total_cbm, 2)} m³</span>
+              <span className="font-medium">{formatNumber(calc.totalCBM, 2)} m³</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Peso Total</span>
-              <span className="font-medium">{formatNumber(calc.total_weight, 0)} kg</span>
+              <span className="font-medium">{formatNumber(calc.totalWeight, 0)} kg</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Tipo de Container</span>
@@ -216,7 +360,7 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Quantidade</span>
-              <span className="font-bold text-lg">{calc.container_qty}</span>
+              <span className="font-bold text-lg">{calc.containerQty}</span>
             </div>
             
             {/* Utilization bar */}
@@ -245,10 +389,10 @@ export default function QuoteDetailPage() {
           
           <div className="space-y-3">
             {[
-              { country: 'US', flag: '🇺🇸', name: 'Estados Unidos', value: calc.landed_us, rate: '30.1%' },
-              { country: 'AR', flag: '🇦🇷', name: 'Argentina (General)', value: calc.landed_ar_standard, rate: '80.81%' },
-              { country: 'AR', flag: '🇦🇷', name: 'Argentina (Simplif.)', value: calc.landed_ar_simplified, rate: '51%' },
-              { country: 'BR', flag: '🇧🇷', name: 'Brasil', value: calc.landed_br, rate: '66.8%' },
+              { country: 'US', flag: '🇺🇸', name: 'Estados Unidos', value: calc.landedUS, rate: '30.1%' },
+              { country: 'AR', flag: '🇦🇷', name: 'Argentina (General)', value: calc.landedARStandard, rate: '80.81%' },
+              { country: 'AR', flag: '🇦🇷', name: 'Argentina (Simplif.)', value: calc.landedARSimplified, rate: '51%' },
+              { country: 'BR', flag: '🇧🇷', name: 'Brasil', value: calc.landedBR, rate: '66.8%' },
             ].map((item, i) => (
               <div 
                 key={i}
@@ -272,86 +416,110 @@ export default function QuoteDetailPage() {
 
       {/* Line items table */}
       <div className="bg-card rounded-lg border overflow-hidden">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b flex items-center justify-between">
           <h3 className="font-semibold">Itens do Pedido</h3>
+          {(quote.status === 'draft' || isAdmin) && (
+            <Button size="sm" onClick={() => setShowAddLineDialog(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Item
+            </Button>
+          )}
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Item</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fornecedor</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Qtd</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">FOB Unit</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">FOB Total</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">CBM</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Peso</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Comparativo</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {quote.lines.map((line) => {
-                const details = getLineDetails(line);
-                
-                return (
-                  <tr key={line.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium">{details.catalogItem?.name ?? 'Item desconhecido'}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {details.catalogItem?.sku}
-                          </span>
-                          {details.catalogItem && (
-                            <CategoryBadge category={details.catalogItem.category} />
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-muted-foreground" />
+        {lines.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">
+            <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>Nenhum item adicionado ainda.</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-4"
+              onClick={() => setShowAddLineDialog(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Primeiro Item
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/50 border-b">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Item</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fornecedor</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Qtd</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">FOB Unit</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">FOB Total</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">CBM</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Peso</th>
+                  {(quote.status === 'draft' || isAdmin) && (
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Ações</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {lines.map((line) => {
+                  const details = getLineDetails(line);
+                  
+                  return (
+                    <tr key={line.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3">
                         <div>
-                          <p className="text-sm">{details.supplier?.name ?? '-'}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {details.supplier?.lead_time_days} dias
-                          </p>
+                          <p className="font-medium">{details.catalogItem?.name ?? 'Item desconhecido'}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {details.catalogItem?.sku}
+                            </span>
+                            {details.catalogItem && (
+                              <CategoryBadge category={details.catalogItem.category} />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium">{line.qty}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrency(details.fobUnit)}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatCurrency(details.fobTotal)}</td>
-                    <td className="px-4 py-3 text-right text-sm">{formatNumber(details.cbmTotal, 2)} m³</td>
-                    <td className="px-4 py-3 text-right text-sm">{formatNumber(details.weightTotal, 0)} kg</td>
-                    <td className="px-4 py-3 text-center">
-                      {details.isBestPrice ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">
-                          Melhor preço
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-warning/10 text-warning">
-                          +{formatNumber(details.priceDiff, 1)}%
-                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm">{details.supplier?.name ?? '-'}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {details.supplier?.lead_time_days} dias
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">{line.qty}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrency(details.fobUnit)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(details.fobTotal)}</td>
+                      <td className="px-4 py-3 text-right text-sm">{formatNumber(details.cbmTotal, 2)} m³</td>
+                      <td className="px-4 py-3 text-right text-sm">{formatNumber(details.weightTotal, 0)} kg</td>
+                      {(quote.status === 'draft' || isAdmin) && (
+                        <td className="px-4 py-3 text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteLine(line.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </td>
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-muted/30 border-t">
-              <tr>
-                <td colSpan={4} className="px-4 py-3 text-right font-medium">Totais:</td>
-                <td className="px-4 py-3 text-right font-bold">{formatCurrency(calc.total_fob)}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.total_cbm, 2)} m³</td>
-                <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.total_weight, 0)} kg</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-muted/30 border-t">
+                <tr>
+                  <td colSpan={4} className="px-4 py-3 text-right font-medium">Totais:</td>
+                  <td className="px-4 py-3 text-right font-bold">{formatCurrency(calc.totalFOB)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.totalCBM, 2)} m³</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.totalWeight, 0)} kg</td>
+                  {(quote.status === 'draft' || isAdmin) && <td></td>}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Calculation formulas reference */}
@@ -376,6 +544,110 @@ export default function QuoteDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Add Line Dialog */}
+      <Dialog open={showAddLineDialog} onOpenChange={setShowAddLineDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Item</DialogTitle>
+            <DialogDescription>
+              Selecione um produto e fornecedor para adicionar ao pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Produto *</Label>
+              <Select 
+                value={lineFormData.catalog_item_id}
+                onValueChange={(v) => setLineFormData(f => ({ ...f, catalog_item_id: v, chosen_supplier_id: '' }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um produto..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalogItems?.filter(c => c.is_active).map(item => (
+                    <SelectItem key={item.id} value={item.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">{item.sku}</span>
+                        <span>{item.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Fornecedor *</Label>
+              <Select 
+                value={lineFormData.chosen_supplier_id}
+                onValueChange={(v) => setLineFormData(f => ({ ...f, chosen_supplier_id: v }))}
+                disabled={!lineFormData.catalog_item_id}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um fornecedor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {lineFormData.catalog_item_id && getPricesForItem(lineFormData.catalog_item_id).map(price => {
+                    const supplier = suppliers?.find(s => s.id === price.supplier_id);
+                    return supplier ? (
+                      <SelectItem key={price.id} value={supplier.id}>
+                        <div className="flex items-center justify-between gap-4">
+                          <span>{supplier.name}</span>
+                          <span className="font-medium">{formatCurrency(Number(price.price_fob_usd))}</span>
+                        </div>
+                      </SelectItem>
+                    ) : null;
+                  })}
+                </SelectContent>
+              </Select>
+              {lineFormData.catalog_item_id && getPricesForItem(lineFormData.catalog_item_id).length === 0 && (
+                <p className="text-sm text-destructive">Nenhum fornecedor com preço para este produto.</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Quantidade *</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={lineFormData.qty}
+                  onChange={(e) => setLineFormData(f => ({ ...f, qty: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Preço Override (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Opcional"
+                  value={lineFormData.override_price_fob_usd}
+                  onChange={(e) => setLineFormData(f => ({ ...f, override_price_fob_usd: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddLineDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAddLine}
+              disabled={
+                !lineFormData.catalog_item_id || 
+                !lineFormData.chosen_supplier_id || 
+                createLine.isPending
+              }
+            >
+              {createLine.isPending ? 'Adicionando...' : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

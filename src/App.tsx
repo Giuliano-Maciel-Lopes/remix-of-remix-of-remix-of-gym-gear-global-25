@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
 // Pages
-import LoginPage from "./pages/Login";
+import AuthPage from "./pages/Auth";
 import DashboardPage from "./pages/Dashboard";
 import CatalogPage from "./pages/Catalog";
 import SuppliersPage from "./pages/Suppliers";
@@ -14,6 +14,8 @@ import SKUMappingPage from "./pages/SKUMapping";
 import QuotesPage from "./pages/Quotes";
 import QuoteDetailPage from "./pages/QuoteDetail";
 import LogisticsPage from "./pages/Logistics";
+import ClientsPage from "./pages/Clients";
+import ComparatorPage from "./pages/Comparator";
 import NotFound from "./pages/NotFound";
 
 // Layout
@@ -21,12 +23,30 @@ import AppLayout from "./components/layout/AppLayout";
 
 const queryClient = new QueryClient();
 
+// Loading component
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-lg bg-primary animate-pulse flex items-center justify-center">
+          <span className="text-primary-foreground font-bold">G</span>
+        </div>
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    </div>
+  );
+}
+
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingScreen />;
+  }
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
   
   return <>{children}</>;
@@ -34,14 +54,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // App routes with auth
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingScreen />;
+  }
   
   return (
     <Routes>
       {/* Public routes */}
       <Route 
+        path="/auth" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage />} 
+      />
+      {/* Legacy login redirect */}
+      <Route 
         path="/login" 
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+        element={<Navigate to="/auth" replace />} 
       />
       
       {/* Protected routes with layout */}
@@ -53,16 +82,18 @@ function AppRoutes() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/clients" element={<ClientsPage />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/sku-mapping" element={<SKUMappingPage />} />
+        <Route path="/comparator" element={<ComparatorPage />} />
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/quotes/:id" element={<QuoteDetailPage />} />
         <Route path="/logistics" element={<LogisticsPage />} />
       </Route>
       
       {/* Redirects */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/auth" replace />} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
