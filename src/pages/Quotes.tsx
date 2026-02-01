@@ -14,10 +14,13 @@ import {
   FileText,
   Calculator,
   TrendingUp,
-  Package
+  Package,
+  Trash2,
+  Edit
 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge, CountryBadge, ContainerBadge } from '@/components/common/StatusBadge';
+import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +51,8 @@ import {
   useQuotes, 
   useClients,
   useCreateQuote,
+  useUpdateQuote,
+  useDeleteQuote,
   Quote
 } from '@/hooks/useSupabaseQuery';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,8 +63,10 @@ export default function QuotesPage() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showDialog, setShowDialog] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Quote | null>(null);
   
-  // Form state for new quote
+  // Form state for new/edit quote
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
@@ -73,7 +80,9 @@ export default function QuotesPage() {
   const { data: quotes, isLoading: loadingQuotes } = useQuotes();
   const { data: clients } = useClients();
   const createQuote = useCreateQuote();
-  const { user } = useAuth();
+  const updateQuote = useUpdateQuote();
+  const deleteQuote = useDeleteQuote();
+  const { user, isAdmin } = useAuth();
 
   // Filter quotes by status
   const filteredQuotes = statusFilter === 'all'
@@ -82,6 +91,7 @@ export default function QuotesPage() {
 
   // Open dialog for new quote
   const handleNew = () => {
+    setEditingQuote(null);
     setFormData({
       name: '',
       client_id: '',
@@ -94,14 +104,60 @@ export default function QuotesPage() {
     setShowDialog(true);
   };
 
-  // Save quote
-  const handleSave = async () => {
+  // Open dialog for editing
+  const handleEdit = (quote: Quote) => {
+    setEditingQuote(quote);
+    setFormData({
+      name: quote.name,
+      client_id: quote.client_id || '',
+      destination_country: quote.destination_country,
+      container_type: quote.container_type,
+      freight_per_container_usd: Number(quote.freight_per_container_usd),
+      insurance_rate: Number(quote.insurance_rate),
+      fixed_costs_usd: Number(quote.fixed_costs_usd),
+    });
+    setShowDialog(true);
+  };
+
+  // Delete quote permanently
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await deleteQuote.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    }
+  };
+
+  // Duplicate quote
+  const handleDuplicate = async (quote: Quote) => {
     await createQuote.mutateAsync({
-      ...formData,
-      client_id: formData.client_id || undefined,
+      name: `${quote.name} (Cópia)`,
+      client_id: quote.client_id || undefined,
+      destination_country: quote.destination_country,
+      container_type: quote.container_type,
+      freight_per_container_usd: quote.freight_per_container_usd,
+      insurance_rate: quote.insurance_rate,
+      fixed_costs_usd: quote.fixed_costs_usd,
       status: 'draft',
       created_by: user?.id,
     });
+  };
+
+  // Save quote
+  const handleSave = async () => {
+    if (editingQuote) {
+      await updateQuote.mutateAsync({
+        id: editingQuote.id,
+        ...formData,
+        client_id: formData.client_id || undefined,
+      });
+    } else {
+      await createQuote.mutateAsync({
+        ...formData,
+        client_id: formData.client_id || undefined,
+        status: 'draft',
+        created_by: user?.id,
+      });
+    }
     setShowDialog(false);
   };
 
@@ -180,7 +236,7 @@ export default function QuotesPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Ações',
       accessor: (quote) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -195,7 +251,13 @@ export default function QuotesPage() {
               <Eye className="w-4 h-4 mr-2" />
               Ver Detalhes
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => handleEdit(quote)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => handleDuplicate(quote)}>
               <Copy className="w-4 h-4 mr-2" />
               Duplicar
             </DropdownMenuItem>
@@ -208,6 +270,18 @@ export default function QuotesPage() {
               <FileText className="w-4 h-4 mr-2" />
               Exportar PDF
             </DropdownMenuItem>
+            {isAdmin && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteTarget(quote)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -358,13 +432,17 @@ export default function QuotesPage() {
         emptyMessage="Nenhuma cotação encontrada."
       />
 
-      {/* Create dialog */}
+      {/* Create/Edit dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nova Cotação</DialogTitle>
+            <DialogTitle>
+              {editingQuote ? 'Editar Cotação' : 'Nova Cotação'}
+            </DialogTitle>
             <DialogDescription>
-              Crie uma nova cotação de importação.
+              {editingQuote 
+                ? 'Atualize as informações da cotação.'
+                : 'Crie uma nova cotação de importação.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -471,13 +549,24 @@ export default function QuotesPage() {
             </Button>
             <Button 
               onClick={handleSave}
-              disabled={!formData.name || createQuote.isPending}
+              disabled={!formData.name || createQuote.isPending || updateQuote.isPending}
             >
-              {createQuote.isPending ? 'Criando...' : 'Criar Cotação'}
+              {createQuote.isPending || updateQuote.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name || ''}
+        itemType="Cotação"
+        onConfirm={handleDelete}
+        isLoading={deleteQuote.isPending}
+        isSoftDelete={false}
+      />
     </div>
   );
 }

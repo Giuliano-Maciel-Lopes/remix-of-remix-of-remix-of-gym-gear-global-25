@@ -4,9 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Package, Filter, Download, Plus, Edit, Power } from 'lucide-react';
+import { Package, Filter, Download, Plus, Edit, Power, Trash2 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { CategoryBadge, StatusBadge } from '@/components/common/StatusBadge';
+import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ import {
   useSupplierPrices, 
   useCreateCatalogItem, 
   useUpdateCatalogItem,
+  useDeleteCatalogItem,
   CatalogItem 
 } from '@/hooks/useSupabaseQuery';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,6 +53,7 @@ export default function CatalogPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showDialog, setShowDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CatalogItem | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -69,6 +72,7 @@ export default function CatalogPage() {
   const { data: prices } = useSupplierPrices();
   const createItem = useCreateCatalogItem();
   const updateItem = useUpdateCatalogItem();
+  const deleteItem = useDeleteCatalogItem();
   const { isAdmin } = useAuth();
 
   // Filter data by category
@@ -123,6 +127,14 @@ export default function CatalogPage() {
       id: item.id,
       is_active: !item.is_active,
     });
+  };
+
+  // Delete item permanently
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await deleteItem.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    }
   };
 
   // Save item
@@ -225,12 +237,13 @@ export default function CatalogPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Ações',
       accessor: (item) => isAdmin ? (
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
+            title="Editar"
             onClick={(e) => {
               e.stopPropagation();
               handleEdit(item);
@@ -241,6 +254,7 @@ export default function CatalogPage() {
           <Button
             variant="ghost"
             size="sm"
+            title={item.is_active ? 'Desativar' : 'Ativar'}
             onClick={(e) => {
               e.stopPropagation();
               handleToggleActive(item);
@@ -248,9 +262,21 @@ export default function CatalogPage() {
           >
             <Power className={`w-4 h-4 ${item.is_active ? 'text-success' : 'text-muted-foreground'}`} />
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Excluir"
+            className="text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(item);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
         </div>
       ) : null,
-      className: 'w-24',
+      className: 'w-32',
     },
   ];
 
@@ -493,6 +519,17 @@ export default function CatalogPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name || ''}
+        itemType="Item do Catálogo"
+        onConfirm={handleDelete}
+        isLoading={deleteItem.isPending}
+        isSoftDelete={false}
+      />
     </div>
   );
 }

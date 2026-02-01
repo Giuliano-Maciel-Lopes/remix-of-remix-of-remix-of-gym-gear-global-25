@@ -16,6 +16,7 @@ import QuoteDetailPage from "./pages/QuoteDetail";
 import LogisticsPage from "./pages/Logistics";
 import ClientsPage from "./pages/Clients";
 import ComparatorPage from "./pages/Comparator";
+import SupplierPricesPage from "./pages/SupplierPrices";
 import NotFound from "./pages/NotFound";
 
 // Layout
@@ -86,6 +87,7 @@ function AppRoutes() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/sku-mapping" element={<SKUMappingPage />} />
+        <Route path="/prices" element={<SupplierPricesPage />} />
         <Route path="/comparator" element={<ComparatorPage />} />
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/quotes/:id" element={<QuoteDetailPage />} />

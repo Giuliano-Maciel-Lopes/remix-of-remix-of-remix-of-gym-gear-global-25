@@ -18,7 +18,8 @@ import {
   LogOut,
   User,
   Users,
-  Calculator
+  Calculator,
+  DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,6 +40,7 @@ const navItems = [
   { path: '/catalog', label: 'Catálogo', icon: Package },
   { path: '/suppliers', label: 'Fornecedores', icon: Building2 },
   { path: '/sku-mapping', label: 'SKU Mapping', icon: Link2 },
+  { path: '/prices', label: 'Preços', icon: DollarSign },
   { path: '/comparator', label: 'Comparador', icon: Calculator },
   { path: '/quotes', label: 'Pedidos', icon: ShoppingCart },
   { path: '/logistics', label: 'Logística', icon: Truck },

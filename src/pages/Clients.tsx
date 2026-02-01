@@ -4,9 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Users, Plus, Mail, Phone, MapPin, Edit, Power } from 'lucide-react';
+import { Users, Plus, Mail, Phone, MapPin, Edit, Power, Trash2 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useClients, useCreateClient, useUpdateClient, Client } from '@/hooks/useSupabaseQuery';
+import { useClients, useCreateClient, useUpdateClient, useDeleteClient, Client } from '@/hooks/useSupabaseQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -44,6 +45,7 @@ export default function ClientsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -59,6 +61,7 @@ export default function ClientsPage() {
   const { data: clients, isLoading } = useClients();
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
+  const deleteClient = useDeleteClient();
   const { isAdmin } = useAuth();
 
   // Filter clients
@@ -96,12 +99,20 @@ export default function ClientsPage() {
     setShowDialog(true);
   };
 
-  // Toggle active status
+  // Toggle active status (soft delete)
   const handleToggleActive = async (client: Client) => {
     await updateClient.mutateAsync({
       id: client.id,
       is_active: !client.is_active,
     });
+  };
+
+  // Delete client permanently
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await deleteClient.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    }
   };
 
   // Save client
@@ -188,12 +199,13 @@ export default function ClientsPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Ações',
       accessor: (client) => isAdmin ? (
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
+            title="Editar"
             onClick={(e) => {
               e.stopPropagation();
               handleEdit(client);
@@ -204,6 +216,7 @@ export default function ClientsPage() {
           <Button
             variant="ghost"
             size="sm"
+            title={client.is_active ? 'Desativar' : 'Ativar'}
             onClick={(e) => {
               e.stopPropagation();
               handleToggleActive(client);
@@ -211,9 +224,21 @@ export default function ClientsPage() {
           >
             <Power className={`w-4 h-4 ${client.is_active ? 'text-success' : 'text-muted-foreground'}`} />
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Excluir"
+            className="text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(client);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
         </div>
       ) : null,
-      className: 'w-24',
+      className: 'w-32',
     },
   ];
 
@@ -416,6 +441,17 @@ export default function ClientsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name || ''}
+        itemType="Cliente"
+        onConfirm={handleDelete}
+        isLoading={deleteClient.isPending}
+        isSoftDelete={false}
+      />
     </div>
   );
 }

@@ -4,8 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Link2, AlertTriangle, Check, Edit, Plus } from 'lucide-react';
+import { Link2, AlertTriangle, Check, Edit, Plus, Trash2 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
+import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import {
   useCatalogItems,
   useCreateSKUMapping,
   useUpdateSKUMapping,
+  useDeleteSKUMapping,
   SKUMapping
 } from '@/hooks/useSupabaseQuery';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,6 +43,7 @@ export default function SKUMappingPage() {
   const [showPendingOnly, setShowPendingOnly] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [editingMapping, setEditingMapping] = useState<SKUMapping | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SKUMapping | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -55,6 +58,7 @@ export default function SKUMappingPage() {
   const { data: catalogItems, isLoading: loadingCatalog } = useCatalogItems();
   const createMapping = useCreateSKUMapping();
   const updateMapping = useUpdateSKUMapping();
+  const deleteMapping = useDeleteSKUMapping();
   const { isAdmin } = useAuth();
 
   const isLoading = loadingMappings || loadingSuppliers || loadingCatalog;
@@ -96,6 +100,14 @@ export default function SKUMappingPage() {
       notes: mapping.notes || '',
     });
     setShowDialog(true);
+  };
+
+  // Delete mapping permanently
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await deleteMapping.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    }
   };
 
   // Save mapping
@@ -205,20 +217,35 @@ export default function SKUMappingPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Ações',
       accessor: (mapping) => isAdmin ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleEdit(mapping);
-          }}
-        >
-          <Edit className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Editar"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(mapping);
+            }}
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Excluir"
+            className="text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(mapping);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       ) : null,
-      className: 'w-12',
+      className: 'w-24',
     },
   ];
 
@@ -464,6 +491,17 @@ export default function SKUMappingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.supplier_model_code || ''}
+        itemType="Mapeamento"
+        onConfirm={handleDelete}
+        isLoading={deleteMapping.isPending}
+        isSoftDelete={false}
+      />
     </div>
   );
 }
