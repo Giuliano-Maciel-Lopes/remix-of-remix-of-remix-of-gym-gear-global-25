@@ -4,9 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power } from 'lucide-react';
+import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power, Trash2 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ import {
   useSKUMappings, 
   useCreateSupplier, 
   useUpdateSupplier,
+  useDeleteSupplier,
   Supplier 
 } from '@/hooks/useSupabaseQuery';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,6 +53,7 @@ export default function SuppliersPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -69,6 +72,7 @@ export default function SuppliersPage() {
   const { data: skuMappings } = useSKUMappings();
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
+  const deleteSupplier = useDeleteSupplier();
   const { isAdmin } = useAuth();
 
   // Filter suppliers based on active status
@@ -121,6 +125,14 @@ export default function SuppliersPage() {
       id: supplier.id,
       is_active: !supplier.is_active,
     });
+  };
+
+  // Delete supplier permanently
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await deleteSupplier.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    }
   };
 
   // Save supplier
@@ -240,12 +252,13 @@ export default function SuppliersPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Ações',
       accessor: (supplier) => isAdmin ? (
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
+            title="Editar"
             onClick={(e) => {
               e.stopPropagation();
               handleEdit(supplier);
@@ -256,6 +269,7 @@ export default function SuppliersPage() {
           <Button
             variant="ghost"
             size="sm"
+            title={supplier.is_active ? 'Desativar' : 'Ativar'}
             onClick={(e) => {
               e.stopPropagation();
               handleToggleActive(supplier);
@@ -263,9 +277,21 @@ export default function SuppliersPage() {
           >
             <Power className={`w-4 h-4 ${supplier.is_active ? 'text-success' : 'text-muted-foreground'}`} />
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Excluir"
+            className="text-destructive hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(supplier);
+            }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
         </div>
       ) : null,
-      className: 'w-24',
+      className: 'w-32',
     },
   ];
 
@@ -503,6 +529,17 @@ export default function SuppliersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        itemName={deleteTarget?.name || ''}
+        itemType="Fornecedor"
+        onConfirm={handleDelete}
+        isLoading={deleteSupplier.isPending}
+        isSoftDelete={false}
+      />
     </div>
   );
 }

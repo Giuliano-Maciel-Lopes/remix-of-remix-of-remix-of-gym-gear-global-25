@@ -90,6 +90,30 @@ export function useUpdateClient() {
   });
 }
 
+export function useDeleteClient() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast({ title: 'Cliente excluído com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir cliente', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // =============================================================================
 // SUPPLIERS
 // =============================================================================
@@ -171,6 +195,30 @@ export function useUpdateSupplier() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao atualizar fornecedor', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteSupplier() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('suppliers')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast({ title: 'Fornecedor excluído com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir fornecedor', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -261,6 +309,30 @@ export function useUpdateCatalogItem() {
   });
 }
 
+export function useDeleteCatalogItem() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('catalog_items')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['catalog_items'] });
+      toast({ title: 'Item excluído com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir item', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // =============================================================================
 // SKU MAPPING
 // =============================================================================
@@ -341,6 +413,30 @@ export function useUpdateSKUMapping() {
   });
 }
 
+export function useDeleteSKUMapping() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sku_mapping')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sku_mappings'] });
+      toast({ title: 'Mapeamento excluído com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir mapeamento', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // =============================================================================
 // SUPPLIER PRICES
 // =============================================================================
@@ -395,6 +491,80 @@ export function useCreateSupplierPrice() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao adicionar preço', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateSupplierPrice() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...price }: Partial<SupplierPrice> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('supplier_prices')
+        .update(price)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supplier_prices'] });
+      toast({ title: 'Preço atualizado com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar preço', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteSupplierPrice() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('supplier_prices')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supplier_prices'] });
+      toast({ title: 'Preço excluído com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir preço', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteQuote() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      toast({ title: 'Cotação excluída com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao excluir cotação', description: error.message, variant: 'destructive' });
     },
   });
 }
