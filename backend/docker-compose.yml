@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gymtrade-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gymtrade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gymtrade_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-gymtrade}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gymtrade}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gymtrade-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gymtrade}:${POSTGRES_PASSWORD:-gymtrade_secret}@postgres:5432/${POSTGRES_DB:-gymtrade}
+      JWT_SECRET: ${JWT_SECRET:-change_this_super_secret_key_in_production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src:ro
+    command: >
+      sh -c "npx prisma migrate deploy && npm run start"
+
+volumes:
+  postgres_data:

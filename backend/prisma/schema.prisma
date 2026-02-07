@@ -1,0 +1,219 @@
+// Prisma Schema for GymTrade Pro
+// Gym Equipment Trading System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum AppRole {
+  admin
+  user
+}
+
+enum ContainerType {
+  TWENTY_FT @map("20FT")
+  FORTY_FT  @map("40FT")
+  FORTY_HC  @map("40HC")
+}
+
+enum CurrencyType {
+  USD
+  CNY
+  EUR
+  BRL
+  ARS
+}
+
+enum DestinationCountry {
+  US
+  AR
+  BR
+}
+
+enum EquipmentCategory {
+  Cardio
+  Strength
+  FreeWeights  @map("Free Weights")
+  Benches
+  Accessories
+  Functional
+}
+
+enum IncotermType {
+  FOB
+  CIF
+  EXW
+  DDP
+}
+
+enum QuoteStatus {
+  draft
+  pending
+  approved
+  ordered
+  cancelled
+}
+
+// =============================================================================
+// MODELS
+// =============================================================================
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  role         UserRole?
+  quotes       Quote[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  role      AppRole  @default(user)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_roles")
+}
+
+model Client {
+  id              String       @id @default(uuid())
+  name            String
+  country         String       @default("BR")
+  defaultCurrency CurrencyType @default(USD) @map("default_currency")
+  contactEmail    String?      @map("contact_email")
+  contactPhone    String?      @map("contact_phone")
+  notes           String?
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  quotes          Quote[]
+
+  @@map("clients")
+}
+
+model Supplier {
+  id              String       @id @default(uuid())
+  name            String
+  country         String       @default("CN")
+  defaultCurrency CurrencyType @default(USD) @map("default_currency")
+  incotermDefault IncotermType @default(FOB) @map("incoterm_default")
+  leadTimeDays    Int          @default(45) @map("lead_time_days")
+  contactEmail    String?      @map("contact_email")
+  contactPhone    String?      @map("contact_phone")
+  notes           String?
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  skuMappings     SkuMapping[]
+  prices          SupplierPrice[]
+  quoteLines      QuoteLine[]
+
+  @@map("suppliers")
+}
+
+model CatalogItem {
+  id           String            @id @default(uuid())
+  sku          String            @unique
+  name         String
+  category     EquipmentCategory @default(Cardio)
+  description  String?
+  unitCbm      Float             @default(0) @map("unit_cbm")
+  unitWeightKg Float             @default(0) @map("unit_weight_kg")
+  hsCode       String?           @map("hs_code")
+  ncmCode      String?           @map("ncm_code")
+  imageUrl     String?           @map("image_url")
+  isActive     Boolean           @default(true) @map("is_active")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  skuMappings  SkuMapping[]
+  prices       SupplierPrice[]
+  quoteLines   QuoteLine[]
+
+  @@map("catalog_items")
+}
+
+model SkuMapping {
+  id                String       @id @default(uuid())
+  supplierId        String       @map("supplier_id")
+  supplierModelCode String       @map("supplier_model_code")
+  catalogItemId     String?      @map("catalog_item_id")
+  notes             String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  supplier          Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  catalogItem       CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@unique([supplierId, supplierModelCode])
+  @@map("sku_mapping")
+}
+
+model SupplierPrice {
+  id               String       @id @default(uuid())
+  supplierId       String       @map("supplier_id")
+  catalogItemId    String       @map("catalog_item_id")
+  priceFobUsd      Float        @map("price_fob_usd")
+  currencyOriginal CurrencyType @default(USD) @map("currency_original")
+  priceOriginal    Float        @map("price_original")
+  validFrom        DateTime     @default(now()) @map("valid_from")
+  validUntil       DateTime?    @map("valid_until")
+  moq              Int?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  supplier         Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  catalogItem      CatalogItem  @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@map("supplier_prices")
+}
+
+model Quote {
+  id                    String             @id @default(uuid())
+  name                  String
+  clientId              String?            @map("client_id")
+  createdBy             String?            @map("created_by")
+  status                QuoteStatus        @default(draft)
+  destinationCountry    DestinationCountry @default(BR) @map("destination_country")
+  containerType         ContainerType      @default(FORTY_HC) @map("container_type")
+  containerQtyOverride  Int?               @map("container_qty_override")
+  freightPerContainerUsd Float             @default(3500) @map("freight_per_container_usd")
+  insuranceRate         Float              @default(0.005) @map("insurance_rate")
+  fixedCostsUsd         Float              @default(500) @map("fixed_costs_usd")
+  notes                 String?
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+  client                Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdByUser         User?              @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  lines                 QuoteLine[]
+
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id                 String      @id @default(uuid())
+  quoteId            String      @map("quote_id")
+  catalogItemId      String      @map("catalog_item_id")
+  chosenSupplierId   String      @map("chosen_supplier_id")
+  qty                Int         @default(1)
+  overridePriceFobUsd Float?     @map("override_price_fob_usd")
+  notes              String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  quote              Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  catalogItem        CatalogItem @relation(fields: [catalogItemId], references: [id])
+  supplier           Supplier    @relation(fields: [chosenSupplierId], references: [id])
+
+  @@map("quote_lines")
+}
