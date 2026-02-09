@@ -1,6 +1,6 @@
 /**
  * Quotes Page
- * Lists all quotes/orders using Supabase with status, calculations, and actions
+ * Lists all quotes/orders with status, calculations, and actions
  */
 
 import React, { useState } from 'react';

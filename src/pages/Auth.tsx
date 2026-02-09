@@ -1,6 +1,6 @@
 /**
  * Authentication Page
- * Supports both login and signup with Supabase Auth
+ * Supports login and signup with JWT API
  */
 
 import React, { useState } from 'react';

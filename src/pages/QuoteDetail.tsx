@@ -1,6 +1,6 @@
 /**
  * Quote Detail Page
- * Shows complete quote breakdown with calculations using Supabase
+ * Shows complete quote breakdown with calculations
  */
 
 import React, { useState } from 'react';

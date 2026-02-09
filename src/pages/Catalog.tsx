@@ -1,6 +1,6 @@
 /**
  * Catalog Page
- * Lists all gym equipment in the catalog using Supabase
+ * Lists all gym equipment in the catalog
  */
 
 import React, { useState } from 'react';

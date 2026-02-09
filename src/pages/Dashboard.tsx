@@ -1,6 +1,6 @@
 /**
  * Dashboard Page
- * Main overview with stats, charts, and alerts using Supabase data
+ * Main overview with stats, charts, and alerts
  */
 
 import React from 'react';

@@ -1,6 +1,6 @@
 /**
  * Logistics Page
- * Container estimation, CBM calculations using Supabase data
+ * Container estimation, CBM calculations
  */
 
 import React, { useState } from 'react';

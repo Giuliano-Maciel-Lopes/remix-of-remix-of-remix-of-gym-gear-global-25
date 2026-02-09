@@ -1,6 +1,6 @@
 /**
  * Suppliers Page
- * Lists all suppliers with filtering and status management using Supabase
+ * Lists all suppliers with filtering and status management
  */
 
 import React, { useState } from 'react';
