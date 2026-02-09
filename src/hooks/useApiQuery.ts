@@ -67,9 +67,15 @@ export function useUpdateClient() {
   return useMutation({
     mutationFn: ({ id, ...client }: Partial<Client> & { id: string }) =>
       clientsApi.update(id, client),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
-      toast({ title: 'Cliente atualizado com sucesso!' });
+      if (variables.is_active === true) {
+        toast({ title: 'Cliente reativado com sucesso!' });
+      } else if (variables.is_active === false) {
+        toast({ title: 'Cliente desativado com sucesso!' });
+      } else {
+        toast({ title: 'Cliente atualizado com sucesso!' });
+      }
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao atualizar cliente', description: error.message, variant: 'destructive' });
@@ -136,9 +142,15 @@ export function useUpdateSupplier() {
   return useMutation({
     mutationFn: ({ id, ...supplier }: Partial<Supplier> & { id: string }) =>
       suppliersApi.update(id, supplier),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      toast({ title: 'Fornecedor atualizado com sucesso!' });
+      if (variables.is_active === true) {
+        toast({ title: 'Fornecedor reativado com sucesso!' });
+      } else if (variables.is_active === false) {
+        toast({ title: 'Fornecedor desativado com sucesso!' });
+      } else {
+        toast({ title: 'Fornecedor atualizado com sucesso!' });
+      }
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao atualizar fornecedor', description: error.message, variant: 'destructive' });
@@ -205,9 +217,15 @@ export function useUpdateCatalogItem() {
   return useMutation({
     mutationFn: ({ id, ...item }: Partial<CatalogItem> & { id: string }) =>
       catalogApi.update(id, item),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['catalog_items'] });
-      toast({ title: 'Item do catálogo atualizado com sucesso!' });
+      if (variables.is_active === true) {
+        toast({ title: 'Item reativado com sucesso!' });
+      } else if (variables.is_active === false) {
+        toast({ title: 'Item desativado com sucesso!' });
+      } else {
+        toast({ title: 'Item do catálogo atualizado com sucesso!' });
+      }
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao atualizar item', description: error.message, variant: 'destructive' });

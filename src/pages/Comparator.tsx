@@ -14,7 +14,8 @@ import {
   DollarSign,
   Ship,
   ArrowRight,
-  Info
+  Info,
+  ShoppingCart
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,17 +27,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { 
   useCatalogItems, 
   useSuppliers, 
   useSupplierPrices,
+  useQuotes,
+  useCreateQuote,
+  useAddQuoteLine,
   CatalogItem,
   Supplier,
   SupplierPrice
 } from '@/hooks/useApiQuery';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 // Duty rates by destination
 const DUTY_RATES = {
@@ -78,11 +91,18 @@ export default function ComparatorPage() {
   const [freightPerContainer, setFreightPerContainer] = useState<number>(3500);
   const [insuranceRate, setInsuranceRate] = useState<number>(0.005);
   const [fixedCosts, setFixedCosts] = useState<number>(500);
+  const [addToOrderDialog, setAddToOrderDialog] = useState<ComparisonResult | null>(null);
+  const [orderQty, setOrderQty] = useState<number>(10);
+
+  const { toast } = useToast();
 
   // Data fetching
   const { data: catalogItems, isLoading: loadingCatalog } = useCatalogItems();
   const { data: suppliers, isLoading: loadingSuppliers } = useSuppliers();
   const { data: prices, isLoading: loadingPrices } = useSupplierPrices();
+  const { data: quotes } = useQuotes();
+  const createQuote = useCreateQuote();
+  const addQuoteLine = useAddQuoteLine();
 
   const isLoading = loadingCatalog || loadingSuppliers || loadingPrices;
 
@@ -153,6 +173,47 @@ export default function ComparatorPage() {
     // Sort by FOB total
     return results.sort((a, b) => a.fobTotal - b.fobTotal);
   }, [selectedCatalogItem, selectedItem, suppliers, prices, quantity, containerType, freightPerContainer, insuranceRate, fixedCosts]);
+
+  // Add to order handler
+  const handleAddToOrder = async () => {
+    if (!addToOrderDialog || !selectedCatalogItem) return;
+    
+    try {
+      // Find draft quote or create a new one
+      const draftQuote = quotes?.find(q => q.status === 'draft');
+      
+      let quoteId: string;
+      if (draftQuote) {
+        quoteId = draftQuote.id;
+      } else {
+        const newQuote = await createQuote.mutateAsync({
+          name: `Pedido ${new Date().toLocaleDateString('pt-BR')}`,
+          status: 'draft',
+          destination_country: 'BR',
+          container_type: containerType,
+          freight_per_container_usd: freightPerContainer,
+          insurance_rate: insuranceRate,
+          fixed_costs_usd: fixedCosts,
+        });
+        quoteId = newQuote.id;
+      }
+      
+      await addQuoteLine.mutateAsync({
+        quoteId,
+        line: {
+          catalog_item_id: selectedCatalogItem.id,
+          chosen_supplier_id: addToOrderDialog.supplier.id,
+          qty: orderQty,
+          override_price_fob_usd: Number(addToOrderDialog.price.price_fob_usd),
+        },
+      });
+      
+      toast({ title: 'Item adicionado ao pedido' });
+      setAddToOrderDialog(null);
+    } catch (error) {
+      toast({ title: 'Erro ao adicionar ao pedido', variant: 'destructive' });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -320,6 +381,7 @@ export default function ComparatorPage() {
                     <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">🇦🇷 Landed AR</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">🇧🇷 Landed BR</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Containers</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -366,6 +428,19 @@ export default function ComparatorPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <Badge variant="outline">{comp.containerQty}× {containerType}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setOrderQty(quantity);
+                            setAddToOrderDialog(comp);
+                          }}
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-1" />
+                          Pedido
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -453,6 +528,42 @@ export default function ComparatorPage() {
           </div>
         </div>
       </div>
+
+      {/* Add to order dialog */}
+      <Dialog open={!!addToOrderDialog} onOpenChange={(open) => !open && setAddToOrderDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar ao Pedido</DialogTitle>
+            <DialogDescription>
+              {selectedCatalogItem?.name} — {addToOrderDialog?.supplier.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Quantidade</Label>
+              <Input
+                type="number"
+                min={1}
+                value={orderQty}
+                onChange={(e) => setOrderQty(parseInt(e.target.value) || 1)}
+              />
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Preço FOB:</span> <span className="font-medium">{addToOrderDialog ? formatCurrency(Number(addToOrderDialog.price.price_fob_usd)) : '-'}</span></p>
+              <p><span className="text-muted-foreground">Total FOB:</span> <span className="font-medium">{addToOrderDialog ? formatCurrency(orderQty * Number(addToOrderDialog.price.price_fob_usd)) : '-'}</span></p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddToOrderDialog(null)}>Cancelar</Button>
+            <Button 
+              onClick={handleAddToOrder}
+              disabled={createQuote.isPending || addQuoteLine.isPending}
+            >
+              {createQuote.isPending || addQuoteLine.isPending ? 'Adicionando...' : 'Adicionar ao Pedido'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

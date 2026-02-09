@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power, Trash2 } from 'lucide-react';
+import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power, Trash2, Download } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FormError } from '@/components/common/FormError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,8 @@ import {
 } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
+import { supplierSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
 
 const countries = [
   { code: 'CN', name: 'China', flag: '🇨🇳' },
@@ -54,6 +57,7 @@ export default function SuppliersPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
+  const [formErrors, setFormErrors] = useState<ValidationErrors>({});
   
   // Form state
   const [formData, setFormData] = useState({
@@ -88,6 +92,7 @@ export default function SuppliersPage() {
   // Open dialog for new supplier
   const handleNew = () => {
     setEditingSupplier(null);
+    setFormErrors({});
     setFormData({
       name: '',
       country: 'CN',
@@ -105,6 +110,7 @@ export default function SuppliersPage() {
   // Open dialog for editing
   const handleEdit = (supplier: Supplier) => {
     setEditingSupplier(supplier);
+    setFormErrors({});
     setFormData({
       name: supplier.name,
       country: supplier.country,
@@ -135,8 +141,14 @@ export default function SuppliersPage() {
     }
   };
 
-  // Save supplier
+  // Save supplier with validation
   const handleSave = async () => {
+    const { success, errors } = validateForm(supplierSchema, formData);
+    if (!success) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     if (editingSupplier) {
       await updateSupplier.mutateAsync({
         id: editingSupplier.id,
@@ -146,6 +158,22 @@ export default function SuppliersPage() {
       await createSupplier.mutateAsync(formData);
     }
     setShowDialog(false);
+  };
+
+  // Export to Excel
+  const handleExport = () => {
+    if (!filteredSuppliers?.length) return;
+    exportToExcel(filteredSuppliers, [
+      { header: 'Nome', accessor: (s) => s.name },
+      { header: 'País', accessor: (s) => countries.find(c => c.code === s.country)?.name || s.country },
+      { header: 'Moeda', accessor: (s) => s.default_currency },
+      { header: 'Incoterm', accessor: (s) => s.incoterm_default },
+      { header: 'Lead Time (dias)', accessor: (s) => s.lead_time_days },
+      { header: 'Email', accessor: (s) => s.contact_email || '-' },
+      { header: 'Telefone', accessor: (s) => s.contact_phone || '-' },
+      { header: 'Status', accessor: (s) => formatStatus(s.is_active) },
+      { header: 'Data de Criação', accessor: (s) => formatDateBR(s.created_at) },
+    ], 'fornecedores');
   };
 
   // Table columns
@@ -337,6 +365,10 @@ export default function SuppliersPage() {
           >
             {showInactive ? 'Ocultar Inativos' : 'Mostrar Inativos'}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
+          </Button>
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
@@ -414,6 +446,7 @@ export default function SuppliersPage() {
                 onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
                 placeholder="Nome do fornecedor"
               />
+              <FormError error={formErrors.name} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -492,6 +525,7 @@ export default function SuppliersPage() {
                 onChange={(e) => setFormData(f => ({ ...f, contact_email: e.target.value }))}
                 placeholder="email@fornecedor.com"
               />
+              <FormError error={formErrors.contact_email} />
             </div>
 
             <div className="space-y-2">

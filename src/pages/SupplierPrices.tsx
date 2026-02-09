@@ -4,9 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { DollarSign, Plus, Edit, Trash2, TrendingDown, TrendingUp, Building2, Package } from 'lucide-react';
+import { DollarSign, Plus, Edit, Trash2, TrendingDown, TrendingUp, Building2, Package, Download } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FormError } from '@/components/common/FormError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR, formatMoney } from '@/lib/exportExcel';
+import { supplierPriceSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
 
 const currencies = ['USD', 'CNY', 'EUR', 'BRL', 'ARS'] as const;
 
@@ -46,6 +49,7 @@ export default function SupplierPricesPage() {
   const [deleteTarget, setDeleteTarget] = useState<SupplierPrice | null>(null);
   const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [filterItem, setFilterItem] = useState<string>('all');
+  const [formErrors, setFormErrors] = useState<ValidationErrors>({});
   
   // Form state
   const [formData, setFormData] = useState({
@@ -91,6 +95,7 @@ export default function SupplierPricesPage() {
   // Open dialog for new price
   const handleNew = () => {
     setEditingPrice(null);
+    setFormErrors({});
     setFormData({
       supplier_id: '',
       catalog_item_id: '',
@@ -106,6 +111,7 @@ export default function SupplierPricesPage() {
   // Open dialog for editing
   const handleEdit = (price: SupplierPrice) => {
     setEditingPrice(price);
+    setFormErrors({});
     setFormData({
       supplier_id: price.supplier_id,
       catalog_item_id: price.catalog_item_id,
@@ -126,8 +132,14 @@ export default function SupplierPricesPage() {
     }
   };
 
-  // Save price
+  // Save price with validation
   const handleSave = async () => {
+    const { success, errors } = validateForm(supplierPriceSchema, formData);
+    if (!success) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     if (editingPrice) {
       await updatePrice.mutateAsync({
         id: editingPrice.id,
@@ -137,6 +149,21 @@ export default function SupplierPricesPage() {
       await createPrice.mutateAsync(formData);
     }
     setShowDialog(false);
+  };
+
+  // Export to Excel
+  const handleExport = () => {
+    if (!filteredPrices?.length) return;
+    exportToExcel(filteredPrices, [
+      { header: 'Item', accessor: (p) => getCatalogItemById(p.catalog_item_id)?.name || '-' },
+      { header: 'SKU', accessor: (p) => getCatalogItemById(p.catalog_item_id)?.sku || '-' },
+      { header: 'Fornecedor', accessor: (p) => getSupplierById(p.supplier_id)?.name || '-' },
+      { header: 'Preço FOB (USD)', accessor: (p) => Number(p.price_fob_usd) },
+      { header: 'Moeda Original', accessor: (p) => p.currency_original },
+      { header: 'Preço Original', accessor: (p) => Number(p.price_original) },
+      { header: 'MOQ', accessor: (p) => p.moq || 1 },
+      { header: 'Válido Desde', accessor: (p) => formatDateBR(p.valid_from) },
+    ], 'precos-fornecedores');
   };
 
   // Table columns
@@ -318,6 +345,10 @@ export default function SupplierPricesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
+          </Button>
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
@@ -468,6 +499,7 @@ export default function SupplierPricesPage() {
                   value={formData.price_fob_usd}
                   onChange={(e) => setFormData(f => ({ ...f, price_fob_usd: parseFloat(e.target.value) || 0 }))}
                 />
+                <FormError error={formErrors.price_fob_usd} />
               </div>
 
               <div className="space-y-2">
