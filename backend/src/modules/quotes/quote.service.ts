@@ -2,26 +2,30 @@
  * Quote Service with Landed Cost Calculations
  */
 
-import { quoteRepository } from './quote.repository.js';
-import { supplierPriceRepository } from '../supplier_prices/supplierPrice.repository.js';
-import { AppError } from '../../shared/middleware/errorHandler.js';
-import { CONTAINER_CBM, DUTY_RATES } from '../../shared/types.js';
-import type { CreateQuoteInput, UpdateQuoteInput, QuoteLineInput } from './quote.schemas.js';
+import { quoteRepository } from "./quote.repository.js";
+import { supplierPriceRepository } from "../supplier_prices/supplierPrice.repository.js";
+import { AppError } from "../../shared/middleware/errorHandler.js";
+import { CONTAINER_CBM, DUTY_RATES } from "../../shared/types.js";
+import type {
+  CreateQuoteInput,
+  UpdateQuoteInput,
+  QuoteLineInput,
+} from "./quote.schemas.js";
 
 // Container capacities in CBM
 const CONTAINER_CAPACITY: Record<string, number> = {
-  'TWENTY_FT': 33,
-  'FORTY_FT': 67,
-  'FORTY_HC': 76,
-  '20FT': 33,
-  '40FT': 67,
-  '40HC': 76,
+  TWENTY_FT: 33,
+  FORTY_FT: 67,
+  FORTY_HC: 76,
+  "20FT": 33,
+  "40FT": 67,
+  "40HC": 76,
 };
 
 const containerTypeReverseMap: Record<string, string> = {
-  'TWENTY_FT': '20FT',
-  'FORTY_FT': '40FT',
-  'FORTY_HC': '40HC',
+  TWENTY_FT: "20FT",
+  FORTY_FT: "40FT",
+  FORTY_HC: "40HC",
 };
 
 interface LineCalculation {
@@ -54,15 +58,15 @@ interface QuoteCalculation {
 export class QuoteService {
   async getAll() {
     const quotes = await quoteRepository.findAll();
-    
-    return quotes.map(q => this.formatQuote(q));
+
+    return quotes.map((q) => this.formatQuote(q));
   }
 
   async getById(id: string) {
     const quote = await quoteRepository.findById(id);
-    
+
     if (!quote) {
-      throw new AppError(404, 'Cotação não encontrada');
+      throw new AppError(404, "Cotação não encontrada");
     }
 
     return this.formatQuoteWithCalculations(quote);
@@ -75,7 +79,7 @@ export class QuoteService {
 
   async update(id: string, input: UpdateQuoteInput) {
     const existing = await quoteRepository.findById(id);
-    if (!existing) throw new AppError(404, 'Cotação não encontrada');
+    if (!existing) throw new AppError(404, "Cotação não encontrada");
 
     const quote = await quoteRepository.update(id, input);
     return this.formatQuoteWithCalculations(quote);
@@ -83,7 +87,7 @@ export class QuoteService {
 
   async delete(id: string) {
     const existing = await quoteRepository.findById(id);
-    if (!existing) throw new AppError(404, 'Cotação não encontrada');
+    if (!existing) throw new AppError(404, "Cotação não encontrada");
 
     await quoteRepository.delete(id);
     return { success: true };
@@ -91,25 +95,29 @@ export class QuoteService {
 
   async addLine(quoteId: string, line: QuoteLineInput) {
     const quote = await quoteRepository.findById(quoteId);
-    if (!quote) throw new AppError(404, 'Cotação não encontrada');
+    if (!quote) throw new AppError(404, "Cotação não encontrada");
 
     await quoteRepository.addLine(quoteId, line);
-    
+
     // Return updated quote with calculations
     const updatedQuote = await quoteRepository.findById(quoteId);
     return this.formatQuoteWithCalculations(updatedQuote!);
   }
 
-  async updateLine(quoteId: string, lineId: string, line: Partial<QuoteLineInput>) {
+  async updateLine(
+    quoteId: string,
+    lineId: string,
+    line: Partial<QuoteLineInput>,
+  ) {
     await quoteRepository.updateLine(lineId, line);
-    
+
     const updatedQuote = await quoteRepository.findById(quoteId);
     return this.formatQuoteWithCalculations(updatedQuote!);
   }
 
   async deleteLine(quoteId: string, lineId: string) {
     await quoteRepository.deleteLine(lineId);
-    
+
     const updatedQuote = await quoteRepository.findById(quoteId);
     return this.formatQuoteWithCalculations(updatedQuote!);
   }
@@ -119,13 +127,16 @@ export class QuoteService {
       id: quote.id,
       name: quote.name,
       client_id: quote.clientId,
-      client: quote.client ? {
-        id: quote.client.id,
-        name: quote.client.name,
-      } : null,
+      client: quote.client
+        ? {
+            id: quote.client.id,
+            name: quote.client.name,
+          }
+        : null,
       status: quote.status,
       destination_country: quote.destinationCountry,
-      container_type: containerTypeReverseMap[quote.containerType] || quote.containerType,
+      container_type:
+        containerTypeReverseMap[quote.containerType] || quote.containerType,
       container_qty_override: quote.containerQtyOverride,
       freight_per_container_usd: quote.freightPerContainerUsd,
       insurance_rate: quote.insuranceRate,
@@ -133,32 +144,37 @@ export class QuoteService {
       notes: quote.notes,
       created_at: quote.createdAt.toISOString(),
       updated_at: quote.updatedAt.toISOString(),
-      lines: quote.lines?.map((l: any) => ({
-        id: l.id,
-        catalog_item_id: l.catalogItemId,
-        catalog_item: l.catalogItem ? {
-          id: l.catalogItem.id,
-          sku: l.catalogItem.sku,
-          name: l.catalogItem.name,
-          unit_cbm: l.catalogItem.unitCbm,
-          unit_weight_kg: l.catalogItem.unitWeightKg,
-        } : null,
-        chosen_supplier_id: l.chosenSupplierId,
-        supplier: l.supplier ? {
-          id: l.supplier.id,
-          name: l.supplier.name,
-        } : null,
-        qty: l.qty,
-        override_price_fob_usd: l.overridePriceFobUsd,
-        notes: l.notes,
-      })) || [],
+      lines:
+        quote.lines?.map((l: any) => ({
+          id: l.id,
+          catalog_item_id: l.catalogItemId,
+          catalog_item: l.catalogItem
+            ? {
+                id: l.catalogItem.id,
+                sku: l.catalogItem.sku,
+                name: l.catalogItem.name,
+                unit_cbm: l.catalogItem.unitCbm,
+                unit_weight_kg: l.catalogItem.unitWeightKg,
+              }
+            : null,
+          chosen_supplier_id: l.chosenSupplierId,
+          supplier: l.supplier
+            ? {
+                id: l.supplier.id,
+                name: l.supplier.name,
+              }
+            : null,
+          qty: l.qty,
+          override_price_fob_usd: l.overridePriceFobUsd,
+          notes: l.notes,
+        })) || [],
     };
   }
 
   private async formatQuoteWithCalculations(quote: any) {
     const formattedQuote = this.formatQuote(quote);
     const calculations = await this.calculateQuote(quote);
-    
+
     return {
       ...formattedQuote,
       calculations,
@@ -167,16 +183,17 @@ export class QuoteService {
 
   private async calculateQuote(quote: any): Promise<QuoteCalculation> {
     const lines: LineCalculation[] = [];
-    
+
     for (const line of quote.lines || []) {
       // Get price from override or lookup
       let priceFobUsd = line.overridePriceFobUsd;
-      
+
       if (!priceFobUsd) {
-        const supplierPrice = await supplierPriceRepository.findBySupplierAndItem(
-          line.chosenSupplierId,
-          line.catalogItemId
-        );
+        const supplierPrice =
+          await supplierPriceRepository.findBySupplierAndItem(
+            line.chosenSupplierId,
+            line.catalogItemId,
+          );
         priceFobUsd = supplierPrice?.priceFobUsd || 0;
       }
 
@@ -185,9 +202,9 @@ export class QuoteService {
 
       lines.push({
         catalog_item_id: line.catalogItemId,
-        catalog_item_name: catalogItem?.name || '',
+        catalog_item_name: catalogItem?.name || "",
         supplier_id: line.chosenSupplierId,
-        supplier_name: supplier?.name || '',
+        supplier_name: supplier?.name || "",
         qty: line.qty,
         price_fob_usd: priceFobUsd,
         fob_total: line.qty * priceFobUsd,
@@ -202,9 +219,13 @@ export class QuoteService {
     const total_weight = lines.reduce((sum, l) => sum + l.weight_total, 0);
 
     // Container calculation
-    const containerType = containerTypeReverseMap[quote.containerType] || quote.containerType;
     const containerCapacity = CONTAINER_CAPACITY[quote.containerType] || 76;
-    const container_qty = quote.containerQtyOverride ?? Math.ceil(total_cbm / containerCapacity) || 1;
+
+    const calculatedContainers = Math.ceil(total_cbm / containerCapacity);
+
+    const container_qty =
+      quote.containerQtyOverride ??
+      (calculatedContainers > 0 ? calculatedContainers : 1);
 
     // Freight and insurance
     const freight_total = container_qty * quote.freightPerContainerUsd;
@@ -218,8 +239,10 @@ export class QuoteService {
     const brRate = DUTY_RATES.BR.standard;
 
     const landed_us = cif_total * (1 + usRate) + quote.fixedCostsUsd;
-    const landed_ar_standard = cif_total * (1 + arStandardRate) + quote.fixedCostsUsd;
-    const landed_ar_simplified = cif_total * (1 + arSimplifiedRate) + quote.fixedCostsUsd;
+    const landed_ar_standard =
+      cif_total * (1 + arStandardRate) + quote.fixedCostsUsd;
+    const landed_ar_simplified =
+      cif_total * (1 + arSimplifiedRate) + quote.fixedCostsUsd;
     const landed_br = cif_total * (1 + brRate) + quote.fixedCostsUsd;
 
     return {
