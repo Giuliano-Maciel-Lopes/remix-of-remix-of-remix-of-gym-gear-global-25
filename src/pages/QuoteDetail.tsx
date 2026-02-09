@@ -108,7 +108,8 @@ export default function QuoteDetailPage() {
     );
   }
 
-  const quote = quoteData?.quote;
+  // useQuoteWithLines is an alias for useQuote which returns the full Quote object
+  const quote = quoteData;
   const lines = quoteData?.lines || [];
 
   if (!quote) {
@@ -180,13 +181,15 @@ export default function QuoteDetailPage() {
   // Add line to quote
   const handleAddLine = async () => {
     await createLine.mutateAsync({
-      quote_id: quote.id,
-      catalog_item_id: lineFormData.catalog_item_id,
-      chosen_supplier_id: lineFormData.chosen_supplier_id,
-      qty: lineFormData.qty,
-      override_price_fob_usd: lineFormData.override_price_fob_usd 
-        ? parseFloat(lineFormData.override_price_fob_usd) 
-        : undefined,
+      quoteId: quote.id,
+      line: {
+        catalog_item_id: lineFormData.catalog_item_id,
+        chosen_supplier_id: lineFormData.chosen_supplier_id,
+        qty: lineFormData.qty,
+        override_price_fob_usd: lineFormData.override_price_fob_usd 
+          ? parseFloat(lineFormData.override_price_fob_usd) 
+          : undefined,
+      },
     });
     setShowAddLineDialog(false);
     setLineFormData({
@@ -199,7 +202,7 @@ export default function QuoteDetailPage() {
 
   // Delete line
   const handleDeleteLine = async (lineId: string) => {
-    await deleteLine.mutateAsync({ id: lineId, quoteId: quote.id });
+    await deleteLine.mutateAsync({ quoteId: quote.id, lineId });
   };
 
   // Update quote status

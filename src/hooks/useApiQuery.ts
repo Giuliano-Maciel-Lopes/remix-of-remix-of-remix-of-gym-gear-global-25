@@ -471,3 +471,37 @@ export function useDeleteQuoteLine() {
     },
   });
 }
+
+// Aliases for backward compatibility
+export const useQuoteWithLines = useQuote;
+export const useCreateQuoteLine = useAddQuoteLine;
+
+// =============================================================================
+// DASHBOARD STATS
+// =============================================================================
+
+export function useDashboardStats() {
+  const { data: quotes } = useQuotes();
+  const { data: suppliers } = useSuppliers();
+  const { data: catalogItems } = useCatalogItems();
+  const { data: clients } = useClients();
+
+  const stats = {
+    totalQuotes: quotes?.length || 0,
+    pendingQuotes: quotes?.filter(q => q.status === 'pending').length || 0,
+    draftQuotes: quotes?.filter(q => q.status === 'draft').length || 0,
+    approvedQuotes: quotes?.filter(q => q.status === 'approved').length || 0,
+    activeSuppliers: suppliers?.filter(s => s.is_active).length || 0,
+    totalSuppliers: suppliers?.length || 0,
+    catalogItems: catalogItems?.length || 0,
+    activeClients: clients?.filter(c => c.is_active).length || 0,
+    totalClients: clients?.length || 0,
+    avgLeadTime: suppliers?.length 
+      ? Math.round(suppliers.reduce((sum, s) => sum + (s.lead_time_days || 0), 0) / suppliers.length)
+      : 0,
+  };
+
+  const isLoading = !quotes && !suppliers && !catalogItems && !clients;
+
+  return { data: isLoading ? undefined : stats, isLoading };
+}

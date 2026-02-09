@@ -138,7 +138,6 @@ export default function QuotesPage() {
       insurance_rate: quote.insurance_rate,
       fixed_costs_usd: quote.fixed_costs_usd,
       status: 'draft',
-      created_by: user?.id,
     });
   };
 
@@ -155,7 +154,6 @@ export default function QuotesPage() {
         ...formData,
         client_id: formData.client_id || undefined,
         status: 'draft',
-        created_by: user?.id,
       });
     }
     setShowDialog(false);
