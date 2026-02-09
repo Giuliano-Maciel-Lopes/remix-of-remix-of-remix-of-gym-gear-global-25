@@ -31,7 +31,7 @@ export type { Client, Supplier, CatalogItem, SKUMapping, SupplierPrice, Quote, Q
 export function useClients() {
   return useQuery({
     queryKey: ['clients'],
-    queryFn: () => clientsApi.getAll(),
+    queryFn: () => clientsApi.getAll(true),
   });
 }
 
@@ -106,7 +106,7 @@ export function useDeleteClient() {
 export function useSuppliers() {
   return useQuery({
     queryKey: ['suppliers'],
-    queryFn: () => suppliersApi.getAll(),
+    queryFn: () => suppliersApi.getAll(true),
   });
 }
 
@@ -181,7 +181,7 @@ export function useDeleteSupplier() {
 export function useCatalogItems() {
   return useQuery({
     queryKey: ['catalog_items'],
-    queryFn: () => catalogApi.getAll(),
+    queryFn: () => catalogApi.getAll(true),
   });
 }
 

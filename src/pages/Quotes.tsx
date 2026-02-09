@@ -16,7 +16,8 @@ import {
   TrendingUp,
   Package,
   Trash2,
-  Edit
+  Edit,
+  Download
 } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge, CountryBadge, ContainerBadge } from '@/components/common/StatusBadge';
@@ -58,6 +59,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR } from '@/lib/exportExcel';
 
 export default function QuotesPage() {
   const navigate = useNavigate();
@@ -332,6 +334,22 @@ export default function QuotesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            if (!filteredQuotes?.length) return;
+            exportToExcel(filteredQuotes, [
+              { header: 'Nome', accessor: (q) => q.name },
+              { header: 'Cliente', accessor: (q) => clients?.find(c => c.id === q.client_id)?.name || '-' },
+              { header: 'Status', accessor: (q) => q.status },
+              { header: 'Destino', accessor: (q) => q.destination_country },
+              { header: 'Container', accessor: (q) => q.container_type },
+              { header: 'Frete/Cont. (USD)', accessor: (q) => Number(q.freight_per_container_usd) },
+              { header: 'Criado em', accessor: (q) => formatDateBR(q.created_at) },
+              { header: 'Atualizado em', accessor: (q) => formatDateBR(q.updated_at) },
+            ], 'cotacoes');
+          }}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/comparator')}>
             <Calculator className="w-4 h-4 mr-2" />
             Comparativo

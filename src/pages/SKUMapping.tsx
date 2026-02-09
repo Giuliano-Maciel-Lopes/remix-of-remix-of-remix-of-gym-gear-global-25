@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Link2, AlertTriangle, Check, Edit, Plus, Trash2 } from 'lucide-react';
+import { Link2, AlertTriangle, Check, Edit, Plus, Trash2, Download } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ import {
 } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR } from '@/lib/exportExcel';
 
 export default function SKUMappingPage() {
   const [showPendingOnly, setShowPendingOnly] = useState(false);
@@ -295,6 +296,21 @@ export default function SKUMappingPage() {
           >
             <AlertTriangle className="w-4 h-4 mr-2" />
             Pendentes ({pendingCount})
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (!filteredMappings?.length) return;
+            exportToExcel(filteredMappings, [
+              { header: 'Fornecedor', accessor: (m) => getSupplierById(m.supplier_id)?.name || '-' },
+              { header: 'Código Fornecedor', accessor: (m) => m.supplier_model_code },
+              { header: 'Item Catálogo', accessor: (m) => getCatalogItemById(m.catalog_item_id)?.name || 'Pendente' },
+              { header: 'SKU', accessor: (m) => getCatalogItemById(m.catalog_item_id)?.sku || '-' },
+              { header: 'Status', accessor: (m) => m.catalog_item_id ? 'Mapeado' : 'Pendente' },
+              { header: 'Observações', accessor: (m) => m.notes || '-' },
+              { header: 'Atualizado', accessor: (m) => formatDateBR(m.updated_at) },
+            ], 'sku-mapping');
+          }}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
           </Button>
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>

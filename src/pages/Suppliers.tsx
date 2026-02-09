@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power, Trash2, Download } from 'lucide-react';
+import { Building2, Plus, Mail, Phone, Clock, MapPin, Edit, Power, Trash2, Download, Upload } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -37,9 +37,11 @@ import {
   Supplier 
 } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
 import { supplierSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
+import { ImportExcelButton } from '@/components/common/ImportExcelButton';
 
 const countries = [
   { code: 'CN', name: 'China', flag: '🇨🇳' },
@@ -78,6 +80,7 @@ export default function SuppliersPage() {
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   // Filter suppliers based on active status
   const filteredSuppliers = showInactive 
@@ -369,6 +372,10 @@ export default function SuppliersPage() {
             <Download className="w-4 h-4 mr-2" />
             Exportar Excel
           </Button>
+          <ImportExcelButton
+            endpoint="/import/suppliers"
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['suppliers'] })}
+          />
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />

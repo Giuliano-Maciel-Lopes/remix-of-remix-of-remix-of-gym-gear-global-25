@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Package, Filter, Download, Plus, Edit, Power, Trash2 } from 'lucide-react';
+import { Package, Filter, Download, Plus, Edit, Power, Trash2, Upload } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { CategoryBadge, StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -37,10 +37,12 @@ import {
   CatalogItem 
 } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
 import { catalogItemSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
+import { ImportExcelButton } from '@/components/common/ImportExcelButton';
 
 // Categories for filtering
 const categories = [
@@ -79,6 +81,7 @@ export default function CatalogPage() {
   const updateItem = useUpdateCatalogItem();
   const deleteItem = useDeleteCatalogItem();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   // Filter data by category and active status
   const categoryFiltered = categoryFilter === 'all'
@@ -360,6 +363,10 @@ export default function CatalogPage() {
             <Download className="w-4 h-4 mr-2" />
             Exportar Excel
           </Button>
+          <ImportExcelButton
+            endpoint="/import/catalog"
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['catalog_items'] })}
+          />
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
