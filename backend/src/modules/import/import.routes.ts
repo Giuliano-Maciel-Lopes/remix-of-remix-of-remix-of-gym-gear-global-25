@@ -6,12 +6,12 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { importController } from './import.controller.js';
-import { requireAuth } from '../../shared/middleware/auth.js';
+import { authenticate} from '../../shared/middleware/auth.js';
 
 const upload = multer({ dest: 'uploads/' });
 const router = Router();
 
-router.use(requireAuth);
+router.use(authenticate);
 
 router.post('/clients', upload.single('file'), (req, res, next) => importController.importClients(req, res, next));
 router.post('/suppliers', upload.single('file'), (req, res, next) => importController.importSuppliers(req, res, next));
