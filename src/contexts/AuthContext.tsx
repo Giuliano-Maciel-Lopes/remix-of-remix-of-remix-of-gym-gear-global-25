@@ -1,15 +1,9 @@
 /**
- * Authentication Context for the Gym Equipment Trading System
- * Supports both Supabase Auth and External API Auth
- * Set USE_EXTERNAL_API to true in .env to use the external backend
+ * Authentication Context - JWT API only
  */
 
 import React, { createContext, useContext } from 'react';
-import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 import { useApiAuth } from '@/hooks/useApiAuth';
-
-// Check if we should use external API
-const USE_EXTERNAL_API = import.meta.env.VITE_USE_EXTERNAL_API === 'true';
 
 interface User {
   id: string;
@@ -32,13 +26,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Use the appropriate auth hook based on configuration
-  const supabaseAuth = useSupabaseAuth();
-  const apiAuth = useApiAuth();
-  
-  const auth = USE_EXTERNAL_API ? apiAuth : supabaseAuth;
+  const auth = useApiAuth();
 
-  // Normalize the user object for compatibility
   const normalizedAuth: AuthContextType = {
     user: auth.user ? {
       id: auth.user.id,
