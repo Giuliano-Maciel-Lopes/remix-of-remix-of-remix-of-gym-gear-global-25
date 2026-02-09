@@ -1,6 +1,6 @@
 /**
- * Authentication Hook for External Backend API
- * Replaces Supabase auth with JWT-based authentication
+ * Authentication Hook for Backend API
+ * JWT-based authentication
  */
 
 import { useState, useEffect, useCallback } from 'react';

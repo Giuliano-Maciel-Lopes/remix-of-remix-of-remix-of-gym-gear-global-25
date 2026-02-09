@@ -1,6 +1,6 @@
 /**
  * Clients Page
- * CRUD operations for clients using Supabase
+ * CRUD operations for clients
  */
 
 import React, { useState } from 'react';

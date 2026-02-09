@@ -1,6 +1,6 @@
 /**
  * API Query Hooks for GymTrade Pro
- * Uses the external backend API instead of Supabase
+ * Uses the backend API (Express + Prisma)
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

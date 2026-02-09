@@ -1,6 +1,6 @@
 /**
  * Supplier Prices Page
- * CRUD operations for supplier prices using Supabase
+ * CRUD operations for supplier prices
  */
 
 import React, { useState } from 'react';

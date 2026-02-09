@@ -1,6 +1,6 @@
 /**
  * SKU Mapping Page
- * Maps supplier product codes to internal catalog items using Supabase
+ * Maps supplier product codes to internal catalog items
  */
 
 import React, { useState } from 'react';
