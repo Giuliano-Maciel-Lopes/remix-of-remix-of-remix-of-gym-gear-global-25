@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { DollarSign, Plus, Edit, Trash2, TrendingDown, TrendingUp, Building2, Package, Download } from 'lucide-react';
+import { DollarSign, Plus, Edit, Trash2, TrendingDown, TrendingUp, Building2, Package, Download, Upload } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
 import { FormError } from '@/components/common/FormError';
@@ -36,10 +36,12 @@ import {
   SupplierPrice
 } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportToExcel, formatDateBR, formatMoney } from '@/lib/exportExcel';
 import { supplierPriceSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
+import { ImportExcelButton } from '@/components/common/ImportExcelButton';
 
 const currencies = ['USD', 'CNY', 'EUR', 'BRL', 'ARS'] as const;
 
@@ -69,6 +71,7 @@ export default function SupplierPricesPage() {
   const updatePrice = useUpdateSupplierPrice();
   const deletePrice = useDeleteSupplierPrice();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   const isLoading = loadingPrices || loadingSuppliers || loadingCatalog;
 
@@ -349,6 +352,10 @@ export default function SupplierPricesPage() {
             <Download className="w-4 h-4 mr-2" />
             Exportar Excel
           </Button>
+          <ImportExcelButton
+            endpoint="/import/supplier-prices"
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['supplier_prices'] })}
+          />
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Users, Plus, Mail, Phone, MapPin, Edit, Power, Trash2, Download } from 'lucide-react';
+import { Users, Plus, Mail, Phone, MapPin, Edit, Power, Trash2, Download, Upload } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -30,9 +30,11 @@ import {
 } from '@/components/ui/select';
 import { useClients, useCreateClient, useUpdateClient, useDeleteClient, Client } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
 import { clientSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
+import { ImportExcelButton } from '@/components/common/ImportExcelButton';
 
 const countries = [
   { code: 'BR', name: 'Brasil', flag: '🇧🇷' },
@@ -67,6 +69,7 @@ export default function ClientsPage() {
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   // Filter clients
   const filteredClients = showInactive 
@@ -314,6 +317,10 @@ export default function ClientsPage() {
             <Download className="w-4 h-4 mr-2" />
             Exportar Excel
           </Button>
+          <ImportExcelButton
+            endpoint="/import/clients"
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
+          />
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
