@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { Users, Plus, Mail, Phone, MapPin, Edit, Power, Trash2 } from 'lucide-react';
+import { Users, Plus, Mail, Phone, MapPin, Edit, Power, Trash2, Download } from 'lucide-react';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FormError } from '@/components/common/FormError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +31,8 @@ import {
 import { useClients, useCreateClient, useUpdateClient, useDeleteClient, Client } from '@/hooks/useApiQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
+import { clientSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
 
 const countries = [
   { code: 'BR', name: 'Brasil', flag: '🇧🇷' },
@@ -46,6 +49,7 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [formErrors, setFormErrors] = useState<ValidationErrors>({});
   
   // Form state
   const [formData, setFormData] = useState({
@@ -72,6 +76,7 @@ export default function ClientsPage() {
   // Open dialog for new client
   const handleNew = () => {
     setEditingClient(null);
+    setFormErrors({});
     setFormData({
       name: '',
       country: 'BR',
@@ -87,6 +92,7 @@ export default function ClientsPage() {
   // Open dialog for editing
   const handleEdit = (client: Client) => {
     setEditingClient(client);
+    setFormErrors({});
     setFormData({
       name: client.name,
       country: client.country,
@@ -115,8 +121,14 @@ export default function ClientsPage() {
     }
   };
 
-  // Save client
+  // Save client with validation
   const handleSave = async () => {
+    const { success, errors } = validateForm(clientSchema, formData);
+    if (!success) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     if (editingClient) {
       await updateClient.mutateAsync({
         id: editingClient.id,
@@ -126,6 +138,20 @@ export default function ClientsPage() {
       await createClient.mutateAsync(formData);
     }
     setShowDialog(false);
+  };
+
+  // Export to Excel
+  const handleExport = () => {
+    if (!filteredClients?.length) return;
+    exportToExcel(filteredClients, [
+      { header: 'Nome', accessor: (c) => c.name },
+      { header: 'País', accessor: (c) => countries.find(co => co.code === c.country)?.name || c.country },
+      { header: 'Email', accessor: (c) => c.contact_email || '-' },
+      { header: 'Telefone', accessor: (c) => c.contact_phone || '-' },
+      { header: 'Moeda', accessor: (c) => c.default_currency },
+      { header: 'Status', accessor: (c) => formatStatus(c.is_active) },
+      { header: 'Data de Criação', accessor: (c) => formatDateBR(c.created_at) },
+    ], 'clientes');
   };
 
   // Table columns
@@ -284,6 +310,10 @@ export default function ClientsPage() {
           >
             {showInactive ? 'Ocultar Inativos' : 'Mostrar Inativos'}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
+          </Button>
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
@@ -355,6 +385,7 @@ export default function ClientsPage() {
                 onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
                 placeholder="Nome do cliente"
               />
+              <FormError error={formErrors.name} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -404,6 +435,7 @@ export default function ClientsPage() {
                 onChange={(e) => setFormData(f => ({ ...f, contact_email: e.target.value }))}
                 placeholder="email@empresa.com"
               />
+              <FormError error={formErrors.contact_email} />
             </div>
 
             <div className="space-y-2">

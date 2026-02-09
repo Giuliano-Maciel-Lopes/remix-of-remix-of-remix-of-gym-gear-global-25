@@ -8,6 +8,7 @@ import { Package, Filter, Download, Plus, Edit, Power, Trash2 } from 'lucide-rea
 import { DataTable, Column } from '@/components/common/DataTable';
 import { CategoryBadge, StatusBadge } from '@/components/common/StatusBadge';
 import { DeleteConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FormError } from '@/components/common/FormError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +39,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exportToExcel, formatDateBR, formatStatus } from '@/lib/exportExcel';
+import { catalogItemSchema, validateForm, ValidationErrors } from '@/lib/validationSchemas';
 
 // Categories for filtering
 const categories = [
@@ -52,8 +55,10 @@ const categories = [
 export default function CatalogPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showDialog, setShowDialog] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CatalogItem | null>(null);
+  const [formErrors, setFormErrors] = useState<ValidationErrors>({});
   
   // Form state
   const [formData, setFormData] = useState({
@@ -75,10 +80,13 @@ export default function CatalogPage() {
   const deleteItem = useDeleteCatalogItem();
   const { isAdmin } = useAuth();
 
-  // Filter data by category
-  const filteredData = categoryFilter === 'all'
+  // Filter data by category and active status
+  const categoryFiltered = categoryFilter === 'all'
     ? catalogItems
     : catalogItems?.filter(item => item.category === categoryFilter);
+  const filteredData = showInactive 
+    ? categoryFiltered 
+    : categoryFiltered?.filter(item => item.is_active);
 
   // Get average FOB price for an item
   const getAvgFOB = (itemId: string): number => {
@@ -90,6 +98,7 @@ export default function CatalogPage() {
   // Open dialog for new item
   const handleNew = () => {
     setEditingItem(null);
+    setFormErrors({});
     setFormData({
       sku: '',
       name: '',
@@ -107,6 +116,7 @@ export default function CatalogPage() {
   // Open dialog for editing
   const handleEdit = (item: CatalogItem) => {
     setEditingItem(item);
+    setFormErrors({});
     setFormData({
       sku: item.sku,
       name: item.name,
@@ -137,8 +147,14 @@ export default function CatalogPage() {
     }
   };
 
-  // Save item
+  // Save item with validation
   const handleSave = async () => {
+    const { success, errors } = validateForm(catalogItemSchema, formData);
+    if (!success) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
     if (editingItem) {
       await updateItem.mutateAsync({
         id: editingItem.id,
@@ -148,6 +164,22 @@ export default function CatalogPage() {
       await createItem.mutateAsync(formData);
     }
     setShowDialog(false);
+  };
+
+  // Export to Excel
+  const handleExport = () => {
+    if (!filteredData?.length) return;
+    exportToExcel(filteredData, [
+      { header: 'Nome', accessor: (i) => i.name },
+      { header: 'SKU', accessor: (i) => i.sku },
+      { header: 'Categoria', accessor: (i) => i.category },
+      { header: 'CBM (m³)', accessor: (i) => Number(i.unit_cbm) },
+      { header: 'Peso (kg)', accessor: (i) => Number(i.unit_weight_kg) },
+      { header: 'HS Code', accessor: (i) => i.hs_code || '-' },
+      { header: 'NCM Code', accessor: (i) => i.ncm_code || '-' },
+      { header: 'Status', accessor: (i) => formatStatus(i.is_active) },
+      { header: 'Data de Criação', accessor: (i) => formatDateBR(i.created_at) },
+    ], 'catalogo');
   };
 
   // Table columns definition
@@ -317,9 +349,16 @@ export default function CatalogPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowInactive(!showInactive)}
+          >
+            {showInactive ? 'Ocultar Inativos' : 'Mostrar Inativos'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
-            Exportar
+            Exportar Excel
           </Button>
           {isAdmin && (
             <Button size="sm" onClick={handleNew}>
@@ -421,6 +460,7 @@ export default function CatalogPage() {
                   onChange={(e) => setFormData(f => ({ ...f, sku: e.target.value }))}
                   placeholder="TRD-001"
                 />
+                <FormError error={formErrors.sku} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Categoria</Label>
@@ -448,6 +488,7 @@ export default function CatalogPage() {
                 onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
                 placeholder="Nome do equipamento"
               />
+              <FormError error={formErrors.name} />
             </div>
 
             <div className="space-y-2">
