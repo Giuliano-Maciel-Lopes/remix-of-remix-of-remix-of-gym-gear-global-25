@@ -17,6 +17,7 @@ import LogisticsPage from "./pages/Logistics";
 import ClientsPage from "./pages/Clients";
 import ComparatorPage from "./pages/Comparator";
 import SupplierPricesPage from "./pages/SupplierPrices";
+import AIReportsPage from "./pages/AIReports";
 import NotFound from "./pages/NotFound";
 
 // Layout
@@ -92,6 +93,7 @@ function AppRoutes() {
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/quotes/:id" element={<QuoteDetailPage />} />
         <Route path="/logistics" element={<LogisticsPage />} />
+        <Route path="/ai" element={<AIReportsPage />} />
       </Route>
       
       {/* Redirects */}

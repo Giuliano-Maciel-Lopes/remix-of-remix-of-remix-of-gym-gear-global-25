@@ -19,7 +19,8 @@ import {
   User,
   Users,
   Calculator,
-  DollarSign
+  DollarSign,
+  Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,6 +45,7 @@ const navItems = [
   { path: '/comparator', label: 'Comparador', icon: Calculator },
   { path: '/quotes', label: 'Pedidos', icon: ShoppingCart },
   { path: '/logistics', label: 'Logística', icon: Truck },
+  { path: '/ai', label: 'IA & Relatórios', icon: Brain },
 ];
 
 export default function AppLayout() {
