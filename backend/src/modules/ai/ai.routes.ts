@@ -4,12 +4,12 @@
 
 import { Router } from 'express';
 import { aiController } from './ai.controller.js';
-import { authMiddleware } from '../../shared/middleware/auth.js';
+import {authenticate } from '../../shared/middleware/auth.js';
 
 const router = Router();
 
 // All AI routes require authentication
-router.use(authMiddleware);
+router.use(authenticate);
 
 router.post('/generate-kit', (req, res, next) => aiController.generateKit(req, res, next));
 router.post('/analyze-prices', (req, res, next) => aiController.analyzePrices(req, res, next));
