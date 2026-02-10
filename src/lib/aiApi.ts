@@ -1,5 +1,8 @@
 /**
  * AI API Client - Read-only analysis endpoints
+ * 
+ * RULE: AI endpoints NEVER return CIF, Landed, or financial totals.
+ * Those values only come from Quotes via calculateQuote.
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -24,7 +27,7 @@ async function aiRequest<T>(endpoint: string, options: RequestInit = {}): Promis
   return response.json();
 }
 
-// Types
+// Types — NO CIF/Landed in kit or plan results
 export interface KitLine {
   catalog_item_id: string;
   catalog_item_name: string;
@@ -53,12 +56,8 @@ export interface KitResult {
     total_weight: number;
     container_type: string;
     container_qty: number;
-    freight_total: number;
-    insurance_total: number;
-    cif_total: number;
-    fixed_costs: number;
-    landed_total: number;
     budget_utilization: number;
+    // NOTE: No CIF or Landed here. Create a Quote for full costs.
   };
 }
 

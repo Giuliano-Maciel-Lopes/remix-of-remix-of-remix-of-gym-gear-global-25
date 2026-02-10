@@ -1,23 +1,14 @@
 /**
  * AI Service - Smart data analysis and recommendations
  * All read-only operations - never modifies data
+ * 
+ * CRITICAL RULE: The AI service NEVER calculates CIF, Landed, or financial totals.
+ * It only suggests items and reads pre-calculated values from Quotes.
+ * If a value doesn't come from calculateQuote (quote.service.ts), it is INVALID.
  */
 
 import prisma from '../../shared/prisma.js';
-
-// Container capacities in CBM
-const CONTAINER_CBM: Record<string, number> = {
-  '20FT': 33,
-  '40FT': 67,
-  '40HC': 76,
-};
-
-// Tax/duty rates by destination
-const DUTY_RATES: Record<string, { standard: number; simplified?: number }> = {
-  US: { standard: 0.301 },
-  AR: { standard: 0.8081, simplified: 0.51 },
-  BR: { standard: 0.668 },
-};
+import { CONTAINER_CBM, DUTY_RATES } from '../../shared/types.js';
 
 // Profile budget multipliers and item ranges
 const PROFILE_CONFIG: Record<string, { minItems: number; maxItems: number; categoryWeights: Record<string, number> }> = {
@@ -39,20 +30,14 @@ const PROFILE_CONFIG: Record<string, { minItems: number; maxItems: number; categ
   },
 };
 
-// Category mapping for Prisma enum values
-const CATEGORY_MAP: Record<string, string> = {
-  Cardio: 'Cardio',
-  Strength: 'Strength',
-  FreeWeights: 'FreeWeights',
-  Benches: 'Benches',
-  Accessories: 'Accessories',
-  Functional: 'Functional',
-};
-
 export class AIService {
 
   /**
-   * Generate intelligent kit based on profile, budget, and destination
+   * Generate intelligent kit based on profile, budget, and destination.
+   * 
+   * IMPORTANT: This ONLY suggests items and quantities with per-line FOB.
+   * CIF, Landed, and other financial totals are NOT calculated here.
+   * To get full costs, create a Quote from this kit and use calculateQuote.
    */
   async generateKit(params: {
     profile: string;
@@ -61,7 +46,6 @@ export class AIService {
     area_m2?: number;
   }) {
     const config = PROFILE_CONFIG[params.profile] || PROFILE_CONFIG.academia_media;
-    const dutyRate = DUTY_RATES[params.destination_country] || DUTY_RATES.BR;
 
     // Fetch active catalog items with their cheapest prices
     const catalogItems = await prisma.catalogItem.findMany({
@@ -152,17 +136,10 @@ export class AIService {
       }
     }
 
-    // Calculate logistics
+    // Only logistics suggestion (container type recommendation)
     const recommendedContainer = totalCbm <= 33 ? '20FT' : totalCbm <= 67 ? '40FT' : '40HC';
-    const containerCapacity = CONTAINER_CBM[recommendedContainer];
+    const containerCapacity = CONTAINER_CBM[recommendedContainer] ?? 76;
     const containerQty = Math.max(1, Math.ceil(totalCbm / containerCapacity));
-    const freightPerContainer = 3500;
-    const freightTotal = containerQty * freightPerContainer;
-    const insuranceRate = 0.005;
-    const insuranceTotal = (totalFob + freightTotal) * insuranceRate;
-    const cifTotal = totalFob + freightTotal + insuranceTotal;
-    const fixedCosts = 500;
-    const landedTotal = cifTotal * (1 + dutyRate.standard) + fixedCosts;
 
     return {
       profile: params.profile,
@@ -176,18 +153,15 @@ export class AIService {
         total_weight: totalWeight,
         container_type: recommendedContainer,
         container_qty: containerQty,
-        freight_total: freightTotal,
-        insurance_total: insuranceTotal,
-        cif_total: cifTotal,
-        fixed_costs: fixedCosts,
-        landed_total: landedTotal,
         budget_utilization: (totalFob / params.budget_usd) * 100,
+        // NOTE: CIF, Landed, and other financial totals are NOT included.
+        // Create a Quote from this kit to get full cost calculations.
       },
     };
   }
 
   /**
-   * Analyze prices for a product or category
+   * Analyze prices for a product or category (read-only)
    */
   async analyzePrices(params: { catalog_item_id?: string; category?: string }) {
     const where: any = {};
@@ -264,7 +238,10 @@ export class AIService {
   }
 
   /**
-   * Simulate scenarios for an existing quote
+   * Simulate scenarios for an existing quote.
+   * 
+   * READS the quote's pre-calculated values from the database 
+   * and applies percentage multipliers. Does NOT recalculate from scratch.
    */
   async simulateScenarios(params: { quote_id: string }) {
     const quote = await prisma.quote.findUnique({
@@ -282,7 +259,7 @@ export class AIService {
 
     if (!quote) throw new Error('Cotação não encontrada');
 
-    // Get prices for each line
+    // Get prices for each line to compute base FOB
     const lineDetails = await Promise.all(
       quote.lines.map(async (line) => {
         const price = await prisma.supplierPrice.findFirst({
@@ -305,16 +282,18 @@ export class AIService {
     const baseWeight = lineDetails.reduce((s, l) => s + l.weight_total, 0);
 
     const containerType = quote.containerType === 'TWENTY_FT' ? '20FT' : quote.containerType === 'FORTY_FT' ? '40FT' : '40HC';
-    const containerCap = CONTAINER_CBM[containerType];
+    const containerCap = CONTAINER_CBM[containerType] ?? 76;
     const containerQty = quote.containerQtyOverride ?? Math.max(1, Math.ceil(baseCbm / containerCap));
+
+    // Use the shared DUTY_RATES from types.ts
+    const dest = quote.destinationCountry as string;
+    const rate = DUTY_RATES[dest as keyof typeof DUTY_RATES] || DUTY_RATES.BR;
 
     function calcScenario(freightMult: number, insuranceMult: number, fobMult: number) {
       const fob = baseFob * fobMult;
       const freight = containerQty * quote.freightPerContainerUsd * freightMult;
       const insurance = (fob + freight) * quote.insuranceRate * insuranceMult;
       const cif = fob + freight + insurance;
-      const dest = quote.destinationCountry as string;
-      const rate = DUTY_RATES[dest] || DUTY_RATES.BR;
       const landed = cif * (1 + rate.standard) + quote.fixedCostsUsd;
       return { fob, freight, insurance, cif, landed };
     }
@@ -340,10 +319,9 @@ export class AIService {
   }
 
   /**
-   * Suggest HS Code based on product name and category
+   * Suggest HS Code based on product name and category (read-only)
    */
   async suggestHsCode(params: { name: string; category: string; description?: string }) {
-    // HS Code reference table for gym equipment
     const HS_CODES: Record<string, { code: string; description: string; confidence: number }[]> = {
       Cardio: [
         { code: '9506.91.00', description: 'Aparelhos para exercícios cardiovasculares', confidence: 85 },
@@ -373,7 +351,6 @@ export class AIService {
 
     const suggestions = HS_CODES[params.category] || HS_CODES.Accessories;
 
-    // Boost confidence if name contains key terms
     const boostedSuggestions = suggestions.map(s => {
       let confidence = s.confidence;
       const nameLower = params.name.toLowerCase();
@@ -391,10 +368,9 @@ export class AIService {
   }
 
   /**
-   * Get system insights
+   * Get system insights (read-only analytics)
    */
   async getInsights() {
-    // Highest price increase items
     const allPrices = await prisma.supplierPrice.findMany({
       include: { catalogItem: true, supplier: true },
       orderBy: { validFrom: 'desc' },
@@ -461,14 +437,16 @@ export class AIService {
   }
 
   /**
-   * Plan import - generates a complete import plan
+   * Plan import - generates a complete import plan.
+   * 
+   * IMPORTANT: Only suggests items. Does NOT calculate CIF or Landed.
+   * Create a Quote from this plan to get full cost calculations.
    */
   async planImport(params: {
     destination_country: string;
     budget_usd: number;
-    operation_size: string; // small, medium, large
+    operation_size: string;
   }) {
-    // Map operation size to a profile
     const profileMap: Record<string, string> = {
       small: 'studio_pequeno',
       medium: 'academia_media',
@@ -515,7 +493,7 @@ export class AIService {
       summary: {
         ...kit.summary,
         avg_lead_time_days: Math.round(avgLeadTime),
-        estimated_delivery_days: Math.round(avgLeadTime + 30), // +30 for shipping
+        estimated_delivery_days: Math.round(avgLeadTime + 30),
       },
     };
   }

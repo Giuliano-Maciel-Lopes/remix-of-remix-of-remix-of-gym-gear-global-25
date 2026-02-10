@@ -47,23 +47,24 @@ import {
   Supplier,
   SupplierPrice
 } from '@/hooks/useApiQuery';
-import { formatCurrency, formatNumber } from '@/lib/calculations';
+import { formatCurrency, formatNumber, calculateCosts, CONTAINER_CBM } from '@/lib/calculations';
+import type { ContainerType } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-// Duty rates by destination
-const DUTY_RATES = {
-  US: { name: 'Estados Unidos', flag: '🇺🇸', rate: 0.301, label: '30.1%' },
-  AR_STANDARD: { name: 'Argentina (Caixa)', flag: '🇦🇷', rate: 0.8081, label: '80.81%' },
-  AR_SIMPLIFIED: { name: 'Argentina (Simplif.)', flag: '🇦🇷', rate: 0.51, label: '51%' },
-  BR: { name: 'Brasil', flag: '🇧🇷', rate: 0.668, label: '66.8%' },
+// Duty rates by destination (display labels only — actual rates come from calculateCosts)
+const DUTY_RATES_LABELS = {
+  US: { name: 'Estados Unidos', flag: '🇺🇸', label: '30.1%' },
+  AR_STANDARD: { name: 'Argentina (Caixa)', flag: '🇦🇷', label: '80.81%' },
+  AR_SIMPLIFIED: { name: 'Argentina (Simplif.)', flag: '🇦🇷', label: '51%' },
+  BR: { name: 'Brasil', flag: '🇧🇷', label: '66.8%' },
 };
 
-// Container specs
-const CONTAINERS = {
-  '20FT': { cbm: 33, label: "Container 20'" },
-  '40FT': { cbm: 67, label: "Container 40'" },
-  '40HC': { cbm: 76, label: "Container 40'HC" },
+// Container specs (display labels only — capacity comes from CONTAINER_CBM)
+const CONTAINER_LABELS = {
+  '20FT': { label: "Container 20'" },
+  '40FT': { label: "Container 40'" },
+  '40HC': { label: "Container 40'HC" },
 };
 
 interface ComparisonResult {
@@ -129,20 +130,25 @@ export default function ComparatorPage() {
       const cbmTotal = quantity * Number(selectedCatalogItem.unit_cbm);
       const weightTotal = quantity * Number(selectedCatalogItem.unit_weight_kg);
 
-      // Container calculation
-      const containerCapacity = CONTAINERS[containerType].cbm;
-      const containerQty = Math.ceil(cbmTotal / containerCapacity);
+      // Use centralized calculateCosts — SINGLE SOURCE OF TRUTH
+      const costs = calculateCosts({
+        totalFob: fobTotal,
+        totalCbm: cbmTotal,
+        totalWeight: weightTotal,
+        containerType: containerType as ContainerType,
+        freightPerContainer,
+        insuranceRate,
+        fixedCosts,
+      });
 
-      // Freight and insurance
-      const freightTotal = containerQty * freightPerContainer;
-      const insuranceTotal = (fobTotal + freightTotal) * insuranceRate;
-      const cifTotal = fobTotal + freightTotal + insuranceTotal;
-
-      // Landed costs
-      const landedUS = cifTotal * (1 + DUTY_RATES.US.rate) + fixedCosts;
-      const landedARStandard = cifTotal * (1 + DUTY_RATES.AR_STANDARD.rate) + fixedCosts;
-      const landedARSimplified = cifTotal * (1 + DUTY_RATES.AR_SIMPLIFIED.rate) + fixedCosts;
-      const landedBR = cifTotal * (1 + DUTY_RATES.BR.rate) + fixedCosts;
+      const containerQty = costs.containerQty;
+      const freightTotal = costs.freightTotal;
+      const insuranceTotal = costs.insuranceTotal;
+      const cifTotal = costs.cifTotal;
+      const landedUS = costs.landedUS;
+      const landedARStandard = costs.landedARStandard;
+      const landedARSimplified = costs.landedARSimplified;
+      const landedBR = costs.landedBR;
 
       results.push({
         supplier,
@@ -458,18 +464,14 @@ export default function ComparatorPage() {
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.entries(DUTY_RATES).map(([key, dest]) => {
-                  const landed = key === 'US' 
-                    ? comparisons[0].landedUS 
-                    : key === 'AR_STANDARD' 
-                      ? comparisons[0].landedARStandard
-                      : key === 'AR_SIMPLIFIED'
-                        ? comparisons[0].landedARSimplified
-                        : comparisons[0].landedBR;
-
-                  return (
+                {[
+                  { key: 'US', flag: '🇺🇸', name: 'Estados Unidos', label: '30.1%', rate: '1.3010', landed: comparisons[0].landedUS },
+                  { key: 'AR_STANDARD', flag: '🇦🇷', name: 'Argentina (Caixa)', label: '80.81%', rate: '1.8081', landed: comparisons[0].landedARStandard },
+                  { key: 'AR_SIMPLIFIED', flag: '🇦🇷', name: 'Argentina (Simplif.)', label: '51%', rate: '1.5100', landed: comparisons[0].landedARSimplified },
+                  { key: 'BR', flag: '🇧🇷', name: 'Brasil', label: '66.8%', rate: '1.6680', landed: comparisons[0].landedBR },
+                ].map((dest) => (
                     <div 
-                      key={key}
+                      key={dest.key}
                       className="bg-muted/30 rounded-lg p-4 space-y-2"
                     >
                       <div className="flex items-center justify-between">
@@ -477,13 +479,12 @@ export default function ComparatorPage() {
                         <Badge variant="secondary">{dest.label}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{dest.name}</p>
-                      <p className="text-2xl font-bold">{formatCurrency(landed)}</p>
+                      <p className="text-2xl font-bold">{formatCurrency(dest.landed)}</p>
                       <p className="text-xs text-muted-foreground">
-                        CIF × {(1 + dest.rate).toFixed(4)} + {formatCurrency(fixedCosts)}
+                        CIF × {dest.rate} + {formatCurrency(fixedCosts)}
                       </p>
                     </div>
-                  );
-                })}
+                ))}
               </div>
             </div>
           )}

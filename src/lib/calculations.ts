@@ -3,160 +3,106 @@
  * All formulas for FOB, CIF, landed costs, and container estimation
  */
 
-import type { 
-  Quote, 
-  QuoteLine, 
-  CatalogItem, 
-  Supplier, 
-  SupplierPrice,
-  LineCalculation,
-  QuoteCalculation,
-  DestinationCountry,
-  ContainerType,
-  CONTAINER_CAPACITY,
-  LANDED_RATES
-} from '@/types';
-import { 
-  getCatalogItemById, 
-  getSupplierById, 
-  getSupplierPrice 
-} from '@/data/mockData';
+// =============================================================================
+// CONSTANTS — SINGLE SOURCE OF TRUTH
+// =============================================================================
+
+export type ContainerType = '20FT' | '40FT' | '40HC';
+export type DestinationCountry = 'US' | 'AR' | 'BR';
 
 // Container capacities in CBM
-const CONTAINER_CBM: Record<ContainerType, number> = {
+export const CONTAINER_CBM: Record<ContainerType, number> = {
   '20FT': 33,
   '40FT': 67,
   '40HC': 76,
 };
 
 // Tax/duty rates by destination
-const DUTY_RATES: Record<DestinationCountry, { standard: number; simplified?: number }> = {
+export const DUTY_RATES: Record<DestinationCountry, { standard: number; simplified?: number }> = {
   US: { standard: 0.301 },
   AR: { standard: 0.8081, simplified: 0.51 },
   BR: { standard: 0.668 },
 };
 
 // =============================================================================
-// LINE-LEVEL CALCULATIONS
+// CANONICAL COST CALCULATION — USE THIS EVERYWHERE
 // =============================================================================
 
+export interface CostCalculationInput {
+  totalFob: number;
+  totalCbm: number;
+  totalWeight: number;
+  containerType: ContainerType;
+  containerQtyOverride?: number | null;
+  freightPerContainer: number;
+  insuranceRate: number;
+  fixedCosts: number;
+}
+
+export interface CostCalculationResult {
+  totalFob: number;
+  totalCbm: number;
+  totalWeight: number;
+  containerQty: number;
+  freightTotal: number;
+  insuranceTotal: number;
+  cifTotal: number;
+  landedUS: number;
+  landedARStandard: number;
+  landedARSimplified: number;
+  landedBR: number;
+}
+
 /**
- * Calculate totals for a single quote line
- * FOB = qty × price_fob_usd
+ * CANONICAL cost calculation function.
+ * ALL FOB → CIF → Landed calculations MUST go through this function.
+ * It is FORBIDDEN to duplicate these formulas anywhere else.
  */
-export function calculateLine(
-  line: QuoteLine,
-  catalogItem: CatalogItem,
-  supplier: Supplier,
-  priceOverride?: number
-): LineCalculation {
-  const supplierPrice = getSupplierPrice(line.chosen_supplier_id, line.catalog_item_id);
-  const price_fob_usd = line.override_price_fob_usd ?? priceOverride ?? supplierPrice?.price_fob_usd ?? 0;
-  
+export function calculateCosts(input: CostCalculationInput): CostCalculationResult {
+  const containerCapacity = CONTAINER_CBM[input.containerType];
+  const calculatedContainers = Math.ceil(input.totalCbm / containerCapacity);
+  const containerQty = input.containerQtyOverride ?? (calculatedContainers > 0 ? calculatedContainers : 1);
+
+  const freightTotal = containerQty * input.freightPerContainer;
+  const insuranceTotal = (input.totalFob + freightTotal) * input.insuranceRate;
+  const cifTotal = input.totalFob + freightTotal + insuranceTotal;
+
+  const landedUS = cifTotal * (1 + DUTY_RATES.US.standard) + input.fixedCosts;
+  const landedARStandard = cifTotal * (1 + DUTY_RATES.AR.standard) + input.fixedCosts;
+  const landedARSimplified = cifTotal * (1 + (DUTY_RATES.AR.simplified ?? DUTY_RATES.AR.standard)) + input.fixedCosts;
+  const landedBR = cifTotal * (1 + DUTY_RATES.BR.standard) + input.fixedCosts;
+
   return {
-    catalog_item: catalogItem,
-    supplier: supplier,
-    qty: line.qty,
-    price_fob_usd: price_fob_usd,
-    fob_total: line.qty * price_fob_usd,
-    cbm_total: line.qty * catalogItem.unit_cbm,
-    weight_total: line.qty * catalogItem.unit_weight_kg,
+    totalFob: input.totalFob,
+    totalCbm: input.totalCbm,
+    totalWeight: input.totalWeight,
+    containerQty,
+    freightTotal,
+    insuranceTotal,
+    cifTotal,
+    landedUS,
+    landedARStandard,
+    landedARSimplified,
+    landedBR,
   };
 }
 
 // =============================================================================
-// QUOTE-LEVEL CALCULATIONS
+// UTILITY: Get landed cost for a specific destination from calculation result
 // =============================================================================
 
-/**
- * Calculate all costs for a complete quote
- * 
- * Formulas:
- * - FOB = Σ(qty × price_fob_usd)
- * - FREIGHT = container_qty × freight_per_container_usd
- * - INSURANCE = (FOB + FREIGHT) × insurance_rate
- * - CIF = FOB + FREIGHT + INSURANCE
- * - LANDED_US = CIF × 1.301 + fixed_costs
- * - LANDED_AR_STANDARD = CIF × 1.8081 + fixed_costs (Régimen General)
- * - LANDED_AR_SIMPLIFIED = CIF × 1.51 + fixed_costs (Courier/Simplificado)
- * - LANDED_BR = CIF × 1.668 + fixed_costs
- * - CBM_TOTAL = Σ(qty × unit_cbm)
- * - CONTAINER_QTY = ⌈CBM_TOTAL / container_capacity⌉
- */
-export function calculateQuote(quote: Quote): QuoteCalculation {
-  // Calculate each line
-  const lineCalculations: LineCalculation[] = quote.lines.map(line => {
-    const catalogItem = getCatalogItemById(line.catalog_item_id);
-    const supplier = getSupplierById(line.chosen_supplier_id);
-    
-    if (!catalogItem || !supplier) {
-      throw new Error(`Missing data for line ${line.id}`);
-    }
-    
-    return calculateLine(line, catalogItem, supplier);
-  });
-  
-  // Sum up line totals
-  const total_fob = lineCalculations.reduce((sum, lc) => sum + lc.fob_total, 0);
-  const total_cbm = lineCalculations.reduce((sum, lc) => sum + lc.cbm_total, 0);
-  const total_weight = lineCalculations.reduce((sum, lc) => sum + lc.weight_total, 0);
-  
-  // Container calculation
-  const containerCapacity = CONTAINER_CBM[quote.container_type];
-  const container_qty = quote.container_qty_override ?? Math.ceil(total_cbm / containerCapacity);
-  
-  // Freight and insurance
-  const freight_total = container_qty * quote.freight_per_container_usd;
-  const insurance_total = (total_fob + freight_total) * quote.insurance_rate;
-  const cif_total = total_fob + freight_total + insurance_total;
-  
-  // Landed costs by destination
-  const usRate = DUTY_RATES.US.standard;
-  const arStandardRate = DUTY_RATES.AR.standard;
-  const arSimplifiedRate = DUTY_RATES.AR.simplified ?? arStandardRate;
-  const brRate = DUTY_RATES.BR.standard;
-  
-  const landed_us = cif_total * (1 + usRate) + quote.fixed_costs_usd;
-  const landed_ar_standard = cif_total * (1 + arStandardRate) + quote.fixed_costs_usd;
-  const landed_ar_simplified = cif_total * (1 + arSimplifiedRate) + quote.fixed_costs_usd;
-  const landed_br = cif_total * (1 + brRate) + quote.fixed_costs_usd;
-  
-  return {
-    quote,
-    lines: lineCalculations,
-    total_fob,
-    total_cbm,
-    total_weight,
-    container_qty,
-    freight_total,
-    insurance_total,
-    cif_total,
-    landed_us,
-    landed_ar_standard,
-    landed_ar_simplified,
-    landed_br,
-  };
-}
-
-// =============================================================================
-// COMPARISON UTILITIES
-// =============================================================================
-
-/**
- * Get the landed cost for a specific destination
- */
 export function getLandedForDestination(
-  calc: QuoteCalculation, 
+  calc: CostCalculationResult,
   destination: DestinationCountry,
   simplified: boolean = false
 ): number {
   switch (destination) {
     case 'US':
-      return calc.landed_us;
+      return calc.landedUS;
     case 'AR':
-      return simplified ? calc.landed_ar_simplified : calc.landed_ar_standard;
+      return simplified ? calc.landedARSimplified : calc.landedARStandard;
     case 'BR':
-      return calc.landed_br;
+      return calc.landedBR;
   }
 }
 
