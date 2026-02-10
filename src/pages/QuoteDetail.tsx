@@ -35,8 +35,10 @@ import {
 } from '@/hooks/useApiQuery';
 import { 
   formatCurrency, 
-  formatNumber
+  formatNumber,
+  CONTAINER_CBM,
 } from '@/lib/calculations';
+import type { ContainerType } from '@/lib/calculations';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,21 +58,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-
-// Container capacities
-const CONTAINER_CBM = {
-  '20FT': 33,
-  '40FT': 67,
-  '40HC': 76,
-};
-
-// Duty rates
-const DUTY_RATES = {
-  US: 0.301,
-  AR_STANDARD: 0.8081,
-  AR_SIMPLIFIED: 0.51,
-  BR: 0.668,
-};
 
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -124,56 +111,25 @@ export default function QuoteDetailPage() {
     );
   }
 
-  // Calculate totals
-  const calculateTotals = () => {
-    let totalFOB = 0;
-    let totalCBM = 0;
-    let totalWeight = 0;
+  // Use backend-calculated values (source of truth from calculateQuote)
+  const backendCalc = (quoteData as any)?.calculations;
 
-    for (const line of lines) {
-      const catalogItem = catalogItems?.find(c => c.id === line.catalog_item_id);
-      const price = prices?.find(p => 
-        p.supplier_id === line.chosen_supplier_id && 
-        p.catalog_item_id === line.catalog_item_id
-      );
-      
-      const fobUnit = Number(line.override_price_fob_usd) || Number(price?.price_fob_usd) || 0;
-      totalFOB += line.qty * fobUnit;
-      totalCBM += line.qty * Number(catalogItem?.unit_cbm || 0);
-      totalWeight += line.qty * Number(catalogItem?.unit_weight_kg || 0);
-    }
-
-    const containerCapacity = CONTAINER_CBM[quote.container_type];
-    const containerQty = quote.container_qty_override || Math.ceil(totalCBM / containerCapacity);
-    
-    const freightTotal = containerQty * Number(quote.freight_per_container_usd);
-    const insuranceTotal = (totalFOB + freightTotal) * Number(quote.insurance_rate);
-    const cifTotal = totalFOB + freightTotal + insuranceTotal;
-    
-    const landedUS = cifTotal * (1 + DUTY_RATES.US) + Number(quote.fixed_costs_usd);
-    const landedARStandard = cifTotal * (1 + DUTY_RATES.AR_STANDARD) + Number(quote.fixed_costs_usd);
-    const landedARSimplified = cifTotal * (1 + DUTY_RATES.AR_SIMPLIFIED) + Number(quote.fixed_costs_usd);
-    const landedBR = cifTotal * (1 + DUTY_RATES.BR) + Number(quote.fixed_costs_usd);
-
-    return {
-      totalFOB,
-      totalCBM,
-      totalWeight,
-      containerQty,
-      freightTotal,
-      insuranceTotal,
-      cifTotal,
-      landedUS,
-      landedARStandard,
-      landedARSimplified,
-      landedBR,
-    };
+  const calc = {
+    totalFOB: backendCalc?.total_fob ?? 0,
+    totalCBM: backendCalc?.total_cbm ?? 0,
+    totalWeight: backendCalc?.total_weight ?? 0,
+    containerQty: backendCalc?.container_qty ?? 1,
+    freightTotal: backendCalc?.freight_total ?? 0,
+    insuranceTotal: backendCalc?.insurance_total ?? 0,
+    cifTotal: backendCalc?.cif_total ?? 0,
+    landedUS: backendCalc?.landed_us ?? 0,
+    landedARStandard: backendCalc?.landed_ar_standard ?? 0,
+    landedARSimplified: backendCalc?.landed_ar_simplified ?? 0,
+    landedBR: backendCalc?.landed_br ?? 0,
   };
-
-  const calc = calculateTotals();
   
   // Container utilization
-  const containerCapacity = CONTAINER_CBM[quote.container_type];
+  const containerCapacity = CONTAINER_CBM[quote.container_type as ContainerType] ?? 76;
   const utilization = calc.totalCBM > 0 
     ? (calc.totalCBM / (calc.containerQty * containerCapacity)) * 100 
     : 0;

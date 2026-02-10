@@ -1,5 +1,9 @@
 /**
  * Kit Generator - AI-powered kit builder based on gym profile, budget, and destination
+ * 
+ * RULE: This component NEVER displays CIF, Landed, or estimated financial totals.
+ * It only shows item suggestions with per-line FOB.
+ * Full cost calculations appear only after creating a Quote (Pedido).
  */
 
 import React, { useState } from 'react';
@@ -10,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { aiApi, KitResult } from '@/lib/aiApi';
 import { quotesApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Package, ShoppingCart, Sparkles } from 'lucide-react';
+import { Loader2, Package, ShoppingCart, Sparkles, Info } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
 
 export default function KitGenerator() {
@@ -70,7 +75,7 @@ export default function KitGenerator() {
         })),
       });
       queryClient.invalidateQueries({ queryKey: ['quotes'] });
-      toast({ title: 'Pedido criado com status pendente para aprovação!' });
+      toast({ title: 'Pedido criado com status pendente! Acesse a aba Pedidos para ver os custos calculados.' });
     } catch (error: any) {
       toast({ title: 'Erro ao criar pedido', description: error.message, variant: 'destructive' });
     } finally {
@@ -139,14 +144,13 @@ export default function KitGenerator() {
 
       {result && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {/* Summary Cards — Only FOB, CBM, Weight, Container (NO CIF/Landed) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
-              { label: 'Total Itens', value: result.summary.total_items },
+              { label: 'Total Itens', value: String(result.summary.total_items) },
               { label: 'FOB Total', value: formatCurrency(result.summary.total_fob) },
-              { label: 'CIF Total', value: formatCurrency(result.summary.cif_total) },
-              { label: 'Landed Total', value: formatCurrency(result.summary.landed_total) },
               { label: 'CBM Total', value: formatNumber(result.summary.total_cbm) + ' m³' },
+              { label: 'Peso Total', value: formatNumber(result.summary.total_weight) + ' kg' },
               { label: 'Container', value: `${result.summary.container_qty}x ${result.summary.container_type}` },
             ].map(({ label, value }) => (
               <Card key={label}>
@@ -157,6 +161,15 @@ export default function KitGenerator() {
               </Card>
             ))}
           </div>
+
+          {/* Info: CIF/Landed only available after creating Quote */}
+          <Alert>
+            <Info className="w-4 h-4" />
+            <AlertDescription>
+              Os custos CIF e Landed serão calculados automaticamente ao criar o Pedido. 
+              Clique em "Criar Pedido Pendente" para ver os valores completos na aba Pedidos.
+            </AlertDescription>
+          </Alert>
 
           {/* Kit Table */}
           <Card>
