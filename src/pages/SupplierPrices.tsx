@@ -143,15 +143,28 @@ export default function SupplierPricesPage() {
       return;
     }
     setFormErrors({});
-    if (editingPrice) {
-      await updatePrice.mutateAsync({
-        id: editingPrice.id,
-        ...formData,
-      });
-    } else {
-      await createPrice.mutateAsync(formData);
+    
+    // Convert date to ISO datetime for backend
+    const payload = {
+      ...formData,
+      valid_from: formData.valid_from
+        ? new Date(formData.valid_from + 'T00:00:00.000Z').toISOString()
+        : new Date().toISOString(),
+    };
+
+    try {
+      if (editingPrice) {
+        await updatePrice.mutateAsync({
+          id: editingPrice.id,
+          ...payload,
+        });
+      } else {
+        await createPrice.mutateAsync(payload);
+      }
+      setShowDialog(false);
+    } catch (e) {
+      // Error toast is handled by the mutation hooks
     }
-    setShowDialog(false);
   };
 
   // Export to Excel
