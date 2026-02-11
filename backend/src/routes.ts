@@ -12,6 +12,7 @@ import skuMappingRoutes from './modules/sku_mapping/skuMapping.routes.js';
 import supplierPriceRoutes from './modules/supplier_prices/supplierPrice.routes.js';
 import quoteRoutes from './modules/quotes/quote.routes.js';
 import importRoutes from './modules/import/import.routes.js';
+import kitRoutes from './modules/kits/kit.routes.js';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/sku-mapping', skuMappingRoutes);
 router.use('/supplier-prices', supplierPriceRoutes);
 router.use('/quotes', quoteRoutes);
 router.use('/import', importRoutes);
+router.use('/kits', kitRoutes);
 
 export default router;

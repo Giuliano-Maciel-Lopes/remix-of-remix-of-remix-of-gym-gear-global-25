@@ -361,6 +361,60 @@ export interface Quote {
   calculations?: QuoteCalculations;
 }
 
+export interface CompareInput {
+  catalog_item_id: string;
+  qty: number;
+  container_type: string;
+  freight_per_container_usd: number;
+  insurance_rate: number;
+  fixed_costs_usd: number;
+}
+
+export interface CompareResult {
+  supplier_id: string;
+  supplier_name: string;
+  supplier_country: string;
+  lead_time_days: number;
+  price_fob_usd: number;
+  fob_total: number;
+  cbm_total: number;
+  weight_total: number;
+  freight_total: number;
+  insurance_total: number;
+  cif_total: number;
+  landed_us: number;
+  landed_ar_standard: number;
+  landed_ar_simplified: number;
+  landed_br: number;
+  container_qty: number;
+  is_best_fob: boolean;
+}
+
+export interface KitInput {
+  store_size: 'small' | 'medium' | 'large';
+  budget_usd: number;
+}
+
+export interface KitItem {
+  catalog_item_id: string;
+  catalog_item_name: string;
+  catalog_item_sku: string;
+  category: string;
+  qty: number;
+  supplier_id: string;
+  supplier_name: string;
+  price_fob_usd: number;
+  fob_total: number;
+}
+
+export interface KitResult {
+  store_size: string;
+  budget_usd: number;
+  total_fob: number;
+  budget_remaining: number;
+  items: KitItem[];
+}
+
 export const quotesApi = {
   getAll: () =>
     request<Quote[]>('/quotes'),
@@ -400,5 +454,23 @@ export const quotesApi = {
   deleteLine: (quoteId: string, lineId: string) =>
     request<Quote>(`/quotes/${quoteId}/lines/${lineId}`, {
       method: 'DELETE',
+    }),
+
+  compare: (input: CompareInput) =>
+    request<CompareResult[]>('/quotes/compare', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+};
+
+// =============================================================================
+// KITS API
+// =============================================================================
+
+export const kitsApi = {
+  generate: (input: KitInput) =>
+    request<KitResult>('/kits/generate', {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
 };

@@ -10,6 +10,9 @@ const router = Router();
 
 router.use(authenticate);
 
+// Compare suppliers (must be before /:id routes)
+router.post('/compare', (req, res, next) => quoteController.compare(req, res, next));
+
 // CRUD for quotes
 router.get('/', (req, res, next) => quoteController.getAll(req, res, next));
 router.get('/:id', (req, res, next) => quoteController.getById(req, res, next));

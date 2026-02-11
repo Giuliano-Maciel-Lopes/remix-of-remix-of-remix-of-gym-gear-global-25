@@ -7,6 +7,15 @@ import { quoteService } from './quote.service.js';
 import { createQuoteSchema, updateQuoteSchema, quoteIdSchema, quoteLineSchema } from './quote.schemas.js';
 import { z } from 'zod';
 
+const compareSchema = z.object({
+  catalog_item_id: z.string().uuid(),
+  qty: z.number().int().min(1),
+  container_type: z.string(),
+  freight_per_container_usd: z.number().min(0),
+  insurance_rate: z.number().min(0),
+  fixed_costs_usd: z.number().min(0),
+});
+
 export class QuoteController {
   async getAll(req: Request, res: Response, next: NextFunction) {
     try {
@@ -92,6 +101,16 @@ export class QuoteController {
       }).parse(req.params);
       const quote = await quoteService.deleteLine(id, lineId);
       res.json(quote);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async compare(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = compareSchema.parse(req.body);
+      const results = await quoteService.compare(input);
+      res.json(results);
     } catch (error) {
       next(error);
     }
