@@ -11,6 +11,7 @@ import type {
   UpdateQuoteInput,
   QuoteLineInput,
 } from "./quote.schemas.js";
+import prisma from "../../shared/prisma.js";
 
 // Container capacities in CBM
 const CONTAINER_CAPACITY: Record<string, number> = {
@@ -53,6 +54,35 @@ interface QuoteCalculation {
   landed_ar_simplified: number;
   landed_br: number;
   lines: LineCalculation[];
+}
+
+interface CompareInput {
+  catalog_item_id: string;
+  qty: number;
+  container_type: string;
+  freight_per_container_usd: number;
+  insurance_rate: number;
+  fixed_costs_usd: number;
+}
+
+interface CompareResult {
+  supplier_id: string;
+  supplier_name: string;
+  supplier_country: string;
+  lead_time_days: number;
+  price_fob_usd: number;
+  fob_total: number;
+  cbm_total: number;
+  weight_total: number;
+  freight_total: number;
+  insurance_total: number;
+  cif_total: number;
+  landed_us: number;
+  landed_ar_standard: number;
+  landed_ar_simplified: number;
+  landed_br: number;
+  container_qty: number;
+  is_best_fob: boolean;
 }
 
 export class QuoteService {
@@ -120,6 +150,76 @@ export class QuoteService {
 
     const updatedQuote = await quoteRepository.findById(quoteId);
     return this.formatQuoteWithCalculations(updatedQuote!);
+  }
+
+  /**
+   * Compare suppliers for a given catalog item
+   * Uses the same calculation logic as calculateQuote
+   */
+  async compare(input: CompareInput): Promise<CompareResult[]> {
+    // Find the catalog item
+    const catalogItem = await prisma.catalogItem.findUnique({
+      where: { id: input.catalog_item_id },
+    });
+    if (!catalogItem) throw new AppError(404, "Item de catálogo não encontrado");
+
+    // Find all supplier prices for this item
+    const supplierPrices = await prisma.supplierPrice.findMany({
+      where: { catalogItemId: input.catalog_item_id },
+      include: { supplier: true },
+    });
+
+    // Filter active suppliers only
+    const activePrices = supplierPrices.filter(sp => sp.supplier.isActive);
+    if (activePrices.length === 0) return [];
+
+    const containerCapacity = CONTAINER_CAPACITY[input.container_type] || 76;
+
+    const results: CompareResult[] = activePrices.map(sp => {
+      const priceFob = sp.priceFobUsd;
+      const fobTotal = input.qty * priceFob;
+      const cbmTotal = input.qty * catalogItem.unitCbm;
+      const weightTotal = input.qty * catalogItem.unitWeightKg;
+
+      const containerQty = Math.max(1, Math.ceil(cbmTotal / containerCapacity));
+      const freightTotal = containerQty * input.freight_per_container_usd;
+      const insuranceTotal = (fobTotal + freightTotal) * input.insurance_rate;
+      const cifTotal = fobTotal + freightTotal + insuranceTotal;
+
+      const landedUs = cifTotal * (1 + DUTY_RATES.US.standard) + input.fixed_costs_usd;
+      const landedArStandard = cifTotal * (1 + DUTY_RATES.AR.standard) + input.fixed_costs_usd;
+      const landedArSimplified = cifTotal * (1 + DUTY_RATES.AR.simplified) + input.fixed_costs_usd;
+      const landedBr = cifTotal * (1 + DUTY_RATES.BR.standard) + input.fixed_costs_usd;
+
+      return {
+        supplier_id: sp.supplier.id,
+        supplier_name: sp.supplier.name,
+        supplier_country: sp.supplier.country,
+        lead_time_days: sp.supplier.leadTimeDays,
+        price_fob_usd: priceFob,
+        fob_total: fobTotal,
+        cbm_total: cbmTotal,
+        weight_total: weightTotal,
+        freight_total: freightTotal,
+        insurance_total: insuranceTotal,
+        cif_total: cifTotal,
+        landed_us: landedUs,
+        landed_ar_standard: landedArStandard,
+        landed_ar_simplified: landedArSimplified,
+        landed_br: landedBr,
+        container_qty: containerQty,
+        is_best_fob: false,
+      };
+    });
+
+    // Sort by FOB and mark best
+    results.sort((a, b) => a.fob_total - b.fob_total);
+    if (results.length > 0) {
+      const minFob = results[0].fob_total;
+      results.forEach(r => { r.is_best_fob = r.fob_total === minFob; });
+    }
+
+    return results;
   }
 
   private formatQuote(quote: any) {

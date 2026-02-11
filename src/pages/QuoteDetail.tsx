@@ -1,6 +1,7 @@
 /**
  * Quote Detail Page
- * Shows complete quote breakdown with calculations
+ * Shows complete quote breakdown with calculations from the backend API
+ * ZERO local calculations — all values come from quote.calculations
  */
 
 import React, { useState } from 'react';
@@ -57,21 +58,6 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Container capacities
-const CONTAINER_CBM = {
-  '20FT': 33,
-  '40FT': 67,
-  '40HC': 76,
-};
-
-// Duty rates
-const DUTY_RATES = {
-  US: 0.301,
-  AR_STANDARD: 0.8081,
-  AR_SIMPLIFIED: 0.51,
-  BR: 0.668,
-};
-
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -108,9 +94,9 @@ export default function QuoteDetailPage() {
     );
   }
 
-  // useQuoteWithLines is an alias for useQuote which returns the full Quote object
   const quote = quoteData;
   const lines = quoteData?.lines || [];
+  const calc = quote?.calculations;
 
   if (!quote) {
     return (
@@ -124,58 +110,24 @@ export default function QuoteDetailPage() {
     );
   }
 
-  // Calculate totals
-  const calculateTotals = () => {
-    let totalFOB = 0;
-    let totalCBM = 0;
-    let totalWeight = 0;
+  // All values from backend calculations
+  const totalFOB = calc?.total_fob ?? 0;
+  const totalCBM = calc?.total_cbm ?? 0;
+  const totalWeight = calc?.total_weight ?? 0;
+  const containerQty = calc?.container_qty ?? 0;
+  const freightTotal = calc?.freight_total ?? 0;
+  const insuranceTotal = calc?.insurance_total ?? 0;
+  const cifTotal = calc?.cif_total ?? 0;
+  const landedUS = calc?.landed_us ?? 0;
+  const landedARStandard = calc?.landed_ar_standard ?? 0;
+  const landedARSimplified = calc?.landed_ar_simplified ?? 0;
+  const landedBR = calc?.landed_br ?? 0;
 
-    for (const line of lines) {
-      const catalogItem = catalogItems?.find(c => c.id === line.catalog_item_id);
-      const price = prices?.find(p => 
-        p.supplier_id === line.chosen_supplier_id && 
-        p.catalog_item_id === line.catalog_item_id
-      );
-      
-      const fobUnit = Number(line.override_price_fob_usd) || Number(price?.price_fob_usd) || 0;
-      totalFOB += line.qty * fobUnit;
-      totalCBM += line.qty * Number(catalogItem?.unit_cbm || 0);
-      totalWeight += line.qty * Number(catalogItem?.unit_weight_kg || 0);
-    }
-
-    const containerCapacity = CONTAINER_CBM[quote.container_type];
-    const containerQty = quote.container_qty_override || Math.ceil(totalCBM / containerCapacity);
-    
-    const freightTotal = containerQty * Number(quote.freight_per_container_usd);
-    const insuranceTotal = (totalFOB + freightTotal) * Number(quote.insurance_rate);
-    const cifTotal = totalFOB + freightTotal + insuranceTotal;
-    
-    const landedUS = cifTotal * (1 + DUTY_RATES.US) + Number(quote.fixed_costs_usd);
-    const landedARStandard = cifTotal * (1 + DUTY_RATES.AR_STANDARD) + Number(quote.fixed_costs_usd);
-    const landedARSimplified = cifTotal * (1 + DUTY_RATES.AR_SIMPLIFIED) + Number(quote.fixed_costs_usd);
-    const landedBR = cifTotal * (1 + DUTY_RATES.BR) + Number(quote.fixed_costs_usd);
-
-    return {
-      totalFOB,
-      totalCBM,
-      totalWeight,
-      containerQty,
-      freightTotal,
-      insuranceTotal,
-      cifTotal,
-      landedUS,
-      landedARStandard,
-      landedARSimplified,
-      landedBR,
-    };
-  };
-
-  const calc = calculateTotals();
-  
-  // Container utilization
-  const containerCapacity = CONTAINER_CBM[quote.container_type];
-  const utilization = calc.totalCBM > 0 
-    ? (calc.totalCBM / (calc.containerQty * containerCapacity)) * 100 
+  // Container utilization from backend data
+  const CONTAINER_CBM: Record<string, number> = { '20FT': 33, '40FT': 67, '40HC': 76 };
+  const containerCapacity = CONTAINER_CBM[quote.container_type] || 76;
+  const utilization = totalCBM > 0 
+    ? (totalCBM / (containerQty * containerCapacity)) * 100 
     : 0;
 
   // Add line to quote
@@ -210,21 +162,20 @@ export default function QuoteDetailPage() {
     await updateQuote.mutateAsync({ id: quote.id, status });
   };
 
-  // Get line details
+  // Get line details from backend calculations
   const getLineDetails = (line: typeof lines[0]) => {
+    const calcLine = calc?.lines?.find(cl => cl.catalog_item_id === line.catalog_item_id && cl.supplier_id === line.chosen_supplier_id);
     const catalogItem = catalogItems?.find(c => c.id === line.catalog_item_id);
     const supplier = suppliers?.find(s => s.id === line.chosen_supplier_id);
-    const price = prices?.find(p => 
-      p.supplier_id === line.chosen_supplier_id && 
-      p.catalog_item_id === line.catalog_item_id
-    );
-    
-    const fobUnit = Number(line.override_price_fob_usd) || Number(price?.price_fob_usd) || 0;
-    const fobTotal = line.qty * fobUnit;
-    const cbmTotal = line.qty * Number(catalogItem?.unit_cbm || 0);
-    const weightTotal = line.qty * Number(catalogItem?.unit_weight_kg || 0);
 
-    return { catalogItem, supplier, fobUnit, fobTotal, cbmTotal, weightTotal };
+    return {
+      catalogItem,
+      supplier,
+      fobUnit: calcLine?.price_fob_usd ?? 0,
+      fobTotal: calcLine?.fob_total ?? 0,
+      cbmTotal: calcLine?.cbm_total ?? 0,
+      weightTotal: calcLine?.weight_total ?? 0,
+    };
   };
 
   // Get prices for selected catalog item
@@ -284,7 +235,7 @@ export default function QuoteDetailPage() {
             <Package className="w-4 h-4" />
             <span className="text-xs uppercase">FOB Total</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.totalFOB)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(totalFOB)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             {lines.length} item(s)
           </p>
@@ -295,9 +246,9 @@ export default function QuoteDetailPage() {
             <Ship className="w-4 h-4" />
             <span className="text-xs uppercase">Frete</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.freightTotal)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(freightTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {calc.containerQty} × {formatCurrency(Number(quote.freight_per_container_usd))}/cont.
+            {containerQty} × {formatCurrency(Number(quote.freight_per_container_usd))}/cont.
           </p>
         </div>
         
@@ -306,7 +257,7 @@ export default function QuoteDetailPage() {
             <Shield className="w-4 h-4" />
             <span className="text-xs uppercase">Seguro</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.insuranceTotal)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(insuranceTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             {(Number(quote.insurance_rate) * 100).toFixed(2)}% do FOB+Frete
           </p>
@@ -317,7 +268,7 @@ export default function QuoteDetailPage() {
             <DollarSign className="w-4 h-4" />
             <span className="text-xs uppercase">CIF Total</span>
           </div>
-          <p className="text-2xl font-bold">{formatCurrency(calc.cifTotal)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(cifTotal)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             FOB + Frete + Seguro
           </p>
@@ -331,10 +282,10 @@ export default function QuoteDetailPage() {
           <p className="text-2xl font-bold">
             {formatCurrency(
               quote.destination_country === 'AR' 
-                ? calc.landedARStandard 
+                ? landedARStandard 
                 : quote.destination_country === 'BR' 
-                  ? calc.landedBR 
-                  : calc.landedUS
+                  ? landedBR 
+                  : landedUS
             )}
           </p>
           <p className="text-xs opacity-80 mt-1">
@@ -351,11 +302,11 @@ export default function QuoteDetailPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">CBM Total</span>
-              <span className="font-medium">{formatNumber(calc.totalCBM, 2)} m³</span>
+              <span className="font-medium">{formatNumber(totalCBM, 2)} m³</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Peso Total</span>
-              <span className="font-medium">{formatNumber(calc.totalWeight, 0)} kg</span>
+              <span className="font-medium">{formatNumber(totalWeight, 0)} kg</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Tipo de Container</span>
@@ -363,7 +314,7 @@ export default function QuoteDetailPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Quantidade</span>
-              <span className="font-bold text-lg">{calc.containerQty}</span>
+              <span className="font-bold text-lg">{containerQty}</span>
             </div>
             
             {/* Utilization bar */}
@@ -392,10 +343,10 @@ export default function QuoteDetailPage() {
           
           <div className="space-y-3">
             {[
-              { country: 'US', flag: '🇺🇸', name: 'Estados Unidos', value: calc.landedUS, rate: '30.1%' },
-              { country: 'AR', flag: '🇦🇷', name: 'Argentina (General)', value: calc.landedARStandard, rate: '80.81%' },
-              { country: 'AR', flag: '🇦🇷', name: 'Argentina (Simplif.)', value: calc.landedARSimplified, rate: '51%' },
-              { country: 'BR', flag: '🇧🇷', name: 'Brasil', value: calc.landedBR, rate: '66.8%' },
+              { country: 'US', flag: '🇺🇸', name: 'Estados Unidos', value: landedUS, rate: '30.1%' },
+              { country: 'AR', flag: '🇦🇷', name: 'Argentina (General)', value: landedARStandard, rate: '80.81%' },
+              { country: 'AR', flag: '🇦🇷', name: 'Argentina (Simplif.)', value: landedARSimplified, rate: '51%' },
+              { country: 'BR', flag: '🇧🇷', name: 'Brasil', value: landedBR, rate: '66.8%' },
             ].map((item, i) => (
               <div 
                 key={i}
@@ -514,9 +465,9 @@ export default function QuoteDetailPage() {
               <tfoot className="bg-muted/30 border-t">
                 <tr>
                   <td colSpan={4} className="px-4 py-3 text-right font-medium">Totais:</td>
-                  <td className="px-4 py-3 text-right font-bold">{formatCurrency(calc.totalFOB)}</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.totalCBM, 2)} m³</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatNumber(calc.totalWeight, 0)} kg</td>
+                  <td className="px-4 py-3 text-right font-bold">{formatCurrency(totalFOB)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatNumber(totalCBM, 2)} m³</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatNumber(totalWeight, 0)} kg</td>
                   {(quote.status === 'draft' || isAdmin) && <td></td>}
                 </tr>
               </tfoot>

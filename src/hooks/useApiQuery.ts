@@ -12,6 +12,7 @@ import {
   skuMappingApi,
   supplierPricesApi,
   quotesApi,
+  kitsApi,
   Client,
   Supplier,
   CatalogItem,
@@ -19,10 +20,14 @@ import {
   SupplierPrice,
   Quote,
   QuoteLine,
+  CompareInput,
+  CompareResult,
+  KitInput,
+  KitResult,
 } from '@/lib/api';
 
 // Re-export types for convenience
-export type { Client, Supplier, CatalogItem, SKUMapping, SupplierPrice, Quote, QuoteLine };
+export type { Client, Supplier, CatalogItem, SKUMapping, SupplierPrice, Quote, QuoteLine, CompareResult, KitResult };
 
 // =============================================================================
 // CLIENTS
@@ -494,6 +499,32 @@ export function useDeleteQuoteLine() {
 export const useQuoteWithLines = useQuote;
 export const useCreateQuoteLine = useAddQuoteLine;
 
+// =============================================================================
+// COMPARE
+// =============================================================================
+
+export function useCompare(input: CompareInput | null) {
+  return useQuery({
+    queryKey: ['compare', input],
+    queryFn: () => quotesApi.compare(input!),
+    enabled: !!input,
+  });
+}
+
+// =============================================================================
+// KITS
+// =============================================================================
+
+export function useGenerateKit() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (input: KitInput) => kitsApi.generate(input),
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao gerar kit', description: error.message, variant: 'destructive' });
+    },
+  });
+}
 // =============================================================================
 // DASHBOARD STATS
 // =============================================================================
