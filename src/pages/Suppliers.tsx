@@ -64,6 +64,7 @@ export default function SuppliersPage() {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     country: 'CN',
     default_currency: 'USD' as Supplier['default_currency'],
     incoterm_default: 'FOB' as Supplier['incoterm_default'],
@@ -98,6 +99,7 @@ export default function SuppliersPage() {
     setFormErrors({});
     setFormData({
       name: '',
+      email: '',
       country: 'CN',
       default_currency: 'USD',
       incoterm_default: 'FOB',
@@ -116,6 +118,7 @@ export default function SuppliersPage() {
     setFormErrors({});
     setFormData({
       name: supplier.name,
+      email: supplier.email,
       country: supplier.country,
       default_currency: supplier.default_currency,
       incoterm_default: supplier.incoterm_default,
@@ -168,11 +171,12 @@ export default function SuppliersPage() {
     if (!filteredSuppliers?.length) return;
     exportToExcel(filteredSuppliers, [
       { header: 'Nome', accessor: (s) => s.name },
+      { header: 'Email', accessor: (s) => s.email },
       { header: 'País', accessor: (s) => countries.find(c => c.code === s.country)?.name || s.country },
       { header: 'Moeda', accessor: (s) => s.default_currency },
       { header: 'Incoterm', accessor: (s) => s.incoterm_default },
       { header: 'Lead Time (dias)', accessor: (s) => s.lead_time_days },
-      { header: 'Email', accessor: (s) => s.contact_email || '-' },
+      { header: 'Email Contato', accessor: (s) => s.contact_email || '-' },
       { header: 'Telefone', accessor: (s) => s.contact_phone || '-' },
       { header: 'Status', accessor: (s) => formatStatus(s.is_active) },
       { header: 'Data de Criação', accessor: (s) => formatDateBR(s.created_at) },
@@ -456,6 +460,18 @@ export default function SuppliersPage() {
               <FormError error={formErrors.name} />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="supplier-email">Email *</Label>
+              <Input
+                id="supplier-email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@fornecedor.com"
+              />
+              <FormError error={formErrors.email} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="country">País</Label>
@@ -524,13 +540,13 @@ export default function SuppliersPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="contact-email">Email de Contato</Label>
               <Input
-                id="email"
+                id="contact-email"
                 type="email"
                 value={formData.contact_email}
                 onChange={(e) => setFormData(f => ({ ...f, contact_email: e.target.value }))}
-                placeholder="email@fornecedor.com"
+                placeholder="contato@fornecedor.com"
               />
               <FormError error={formErrors.contact_email} />
             </div>
@@ -563,7 +579,7 @@ export default function SuppliersPage() {
             </Button>
             <Button 
               onClick={handleSave}
-              disabled={!formData.name || createSupplier.isPending || updateSupplier.isPending}
+              disabled={!formData.name || !formData.email || createSupplier.isPending || updateSupplier.isPending}
             >
               {createSupplier.isPending || updateSupplier.isPending ? 'Salvando...' : 'Salvar'}
             </Button>

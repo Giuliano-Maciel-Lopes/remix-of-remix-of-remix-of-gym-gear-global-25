@@ -30,6 +30,7 @@ export class ClientRepository {
     return prisma.client.create({
       data: {
         name: data.name,
+        email: data.email,
         country: data.country || 'BR',
         defaultCurrency: data.default_currency || 'USD',
         contactEmail: data.contact_email,
@@ -45,6 +46,7 @@ export class ClientRepository {
       where: { id },
       data: {
         name: data.name,
+        email: data.email,
         country: data.country,
         defaultCurrency: data.default_currency,
         contactEmail: data.contact_email,

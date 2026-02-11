@@ -9,6 +9,7 @@ const incotermEnum = z.enum(['FOB', 'CIF', 'EXW', 'DDP']);
 
 export const createSupplierSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(255),
+  email: z.string().email('Email inválido').min(1, 'Email é obrigatório').max(255),
   country: z.string().min(2).max(100).default('CN'),
   default_currency: currencyEnum.default('USD'),
   incoterm_default: incotermEnum.default('FOB'),

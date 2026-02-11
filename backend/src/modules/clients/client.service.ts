@@ -15,6 +15,7 @@ export class ClientService {
     return clients.map(c => ({
       id: c.id,
       name: c.name,
+      email: c.email,
       country: c.country,
       default_currency: c.defaultCurrency,
       contact_email: c.contactEmail,
@@ -36,6 +37,7 @@ export class ClientService {
     return {
       id: client.id,
       name: client.name,
+      email: client.email,
       country: client.country,
       default_currency: client.defaultCurrency,
       contact_email: client.contactEmail,
@@ -54,6 +56,7 @@ export class ClientService {
     return {
       id: client.id,
       name: client.name,
+      email: client.email,
       country: client.country,
       default_currency: client.defaultCurrency,
       contact_email: client.contactEmail,
@@ -77,6 +80,7 @@ export class ClientService {
     return {
       id: client.id,
       name: client.name,
+      email: client.email,
       country: client.country,
       default_currency: client.defaultCurrency,
       contact_email: client.contactEmail,

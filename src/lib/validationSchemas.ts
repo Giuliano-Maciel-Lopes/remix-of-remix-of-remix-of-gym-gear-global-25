@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 export const clientSchema = z.object({
   name: z.string().trim().min(1, 'Nome é obrigatório').max(100, 'Nome deve ter no máximo 100 caracteres'),
+  email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   country: z.string().min(1, 'País é obrigatório'),
   default_currency: z.enum(['USD', 'CNY', 'EUR', 'BRL', 'ARS']),
   contact_email: z.string().email('Email inválido').or(z.literal('')).optional(),
@@ -16,6 +17,7 @@ export const clientSchema = z.object({
 
 export const supplierSchema = z.object({
   name: z.string().trim().min(1, 'Nome é obrigatório').max(100, 'Nome deve ter no máximo 100 caracteres'),
+  email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   country: z.string().min(1, 'País é obrigatório'),
   default_currency: z.enum(['USD', 'CNY', 'EUR']),
   incoterm_default: z.enum(['FOB', 'CIF', 'EXW', 'DDP']),
