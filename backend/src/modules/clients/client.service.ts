@@ -5,13 +5,13 @@
 
 import { clientRepository } from './client.repository.js';
 import { AppError } from '../../shared/middleware/errorHandler.js';
+import prisma from '../../shared/prisma.js';
 import type { CreateClientInput, UpdateClientInput } from './client.schemas.js';
 
 export class ClientService {
   async getAll(includeInactive = false) {
     const clients = await clientRepository.findAll(includeInactive);
     
-    // Map to API format (snake_case)
     return clients.map(c => ({
       id: c.id,
       name: c.name,
@@ -93,6 +93,14 @@ export class ClientService {
     
     if (!existing) {
       throw new AppError(404, 'Cliente não encontrado');
+    }
+
+    if (!soft) {
+      // Check for related quotes before hard delete
+      const quotesCount = await prisma.quote.count({ where: { clientId: id } });
+      if (quotesCount > 0) {
+        throw new AppError(400, 'Não é possível excluir este cliente pois ele está vinculado a pedidos.', 'HAS_DEPENDENCIES');
+      }
     }
 
     if (soft) {

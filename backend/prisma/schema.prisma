@@ -154,7 +154,7 @@ model SkuMapping {
   notes             String?
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
-  supplier          Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier          Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   catalogItem       CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
 
   @@unique([supplierId, supplierModelCode])
@@ -173,8 +173,8 @@ model SupplierPrice {
   moq              Int?
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
-  supplier         Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  catalogItem      CatalogItem  @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  supplier         Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  catalogItem      CatalogItem  @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
 
   @@map("supplier_prices")
 }
@@ -212,8 +212,8 @@ model QuoteLine {
   createdAt          DateTime    @default(now()) @map("created_at")
   updatedAt          DateTime    @updatedAt @map("updated_at")
   quote              Quote       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  catalogItem        CatalogItem @relation(fields: [catalogItemId], references: [id])
-  supplier           Supplier    @relation(fields: [chosenSupplierId], references: [id])
+  catalogItem        CatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  supplier           Supplier    @relation(fields: [chosenSupplierId], references: [id], onDelete: Restrict)
 
   @@map("quote_lines")
 }

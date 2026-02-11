@@ -88,17 +88,14 @@ interface CompareResult {
 export class QuoteService {
   async getAll() {
     const quotes = await quoteRepository.findAll();
-
     return quotes.map((q) => this.formatQuote(q));
   }
 
   async getById(id: string) {
     const quote = await quoteRepository.findById(id);
-
     if (!quote) {
       throw new AppError(404, "Cotação não encontrada");
     }
-
     return this.formatQuoteWithCalculations(quote);
   }
 
@@ -123,13 +120,37 @@ export class QuoteService {
     return { success: true };
   }
 
+  async changeClient(quoteId: string, clientId: string) {
+    const quote = await quoteRepository.findById(quoteId);
+    if (!quote) throw new AppError(404, "Cotação não encontrada");
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new AppError(404, "Cliente não encontrado");
+    if (!client.isActive) throw new AppError(400, "O cliente selecionado está inativo.");
+
+    const updated = await prisma.quote.update({
+      where: { id: quoteId },
+      data: { clientId },
+      include: {
+        client: true,
+        lines: {
+          include: {
+            catalogItem: true,
+            supplier: true,
+          },
+        },
+      },
+    });
+
+    return this.formatQuoteWithCalculations(updated);
+  }
+
   async addLine(quoteId: string, line: QuoteLineInput) {
     const quote = await quoteRepository.findById(quoteId);
     if (!quote) throw new AppError(404, "Cotação não encontrada");
 
     await quoteRepository.addLine(quoteId, line);
 
-    // Return updated quote with calculations
     const updatedQuote = await quoteRepository.findById(quoteId);
     return this.formatQuoteWithCalculations(updatedQuote!);
   }
@@ -152,24 +173,17 @@ export class QuoteService {
     return this.formatQuoteWithCalculations(updatedQuote!);
   }
 
-  /**
-   * Compare suppliers for a given catalog item
-   * Uses the same calculation logic as calculateQuote
-   */
   async compare(input: CompareInput): Promise<CompareResult[]> {
-    // Find the catalog item
     const catalogItem = await prisma.catalogItem.findUnique({
       where: { id: input.catalog_item_id },
     });
     if (!catalogItem) throw new AppError(404, "Item de catálogo não encontrado");
 
-    // Find all supplier prices for this item
     const supplierPrices = await prisma.supplierPrice.findMany({
       where: { catalogItemId: input.catalog_item_id },
       include: { supplier: true },
     });
 
-    // Filter active suppliers only
     const activePrices = supplierPrices.filter(sp => sp.supplier.isActive);
     if (activePrices.length === 0) return [];
 
@@ -212,7 +226,6 @@ export class QuoteService {
       };
     });
 
-    // Sort by FOB and mark best
     results.sort((a, b) => a.fob_total - b.fob_total);
     if (results.length > 0) {
       const minFob = results[0].fob_total;
@@ -285,7 +298,6 @@ export class QuoteService {
     const lines: LineCalculation[] = [];
 
     for (const line of quote.lines || []) {
-      // Get price from override or lookup
       let priceFobUsd = line.overridePriceFobUsd;
 
       if (!priceFobUsd) {
@@ -313,37 +325,24 @@ export class QuoteService {
       });
     }
 
-    // Sum up line totals
     const total_fob = lines.reduce((sum, l) => sum + l.fob_total, 0);
     const total_cbm = lines.reduce((sum, l) => sum + l.cbm_total, 0);
     const total_weight = lines.reduce((sum, l) => sum + l.weight_total, 0);
 
-    // Container calculation
     const containerCapacity = CONTAINER_CAPACITY[quote.containerType] || 76;
-
     const calculatedContainers = Math.ceil(total_cbm / containerCapacity);
-
     const container_qty =
       quote.containerQtyOverride ??
       (calculatedContainers > 0 ? calculatedContainers : 1);
 
-    // Freight and insurance
     const freight_total = container_qty * quote.freightPerContainerUsd;
     const insurance_total = (total_fob + freight_total) * quote.insuranceRate;
     const cif_total = total_fob + freight_total + insurance_total;
 
-    // Landed costs by destination
-    const usRate = DUTY_RATES.US.standard;
-    const arStandardRate = DUTY_RATES.AR.standard;
-    const arSimplifiedRate = DUTY_RATES.AR.simplified;
-    const brRate = DUTY_RATES.BR.standard;
-
-    const landed_us = cif_total * (1 + usRate) + quote.fixedCostsUsd;
-    const landed_ar_standard =
-      cif_total * (1 + arStandardRate) + quote.fixedCostsUsd;
-    const landed_ar_simplified =
-      cif_total * (1 + arSimplifiedRate) + quote.fixedCostsUsd;
-    const landed_br = cif_total * (1 + brRate) + quote.fixedCostsUsd;
+    const landed_us = cif_total * (1 + DUTY_RATES.US.standard) + quote.fixedCostsUsd;
+    const landed_ar_standard = cif_total * (1 + DUTY_RATES.AR.standard) + quote.fixedCostsUsd;
+    const landed_ar_simplified = cif_total * (1 + DUTY_RATES.AR.simplified) + quote.fixedCostsUsd;
+    const landed_br = cif_total * (1 + DUTY_RATES.BR.standard) + quote.fixedCostsUsd;
 
     return {
       total_fob,
