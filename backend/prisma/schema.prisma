@@ -92,6 +92,7 @@ model UserRole {
 model Client {
   id              String       @id @default(uuid())
   name            String
+  email           String       @unique
   country         String       @default("BR")
   defaultCurrency CurrencyType @default(USD) @map("default_currency")
   contactEmail    String?      @map("contact_email")
@@ -108,6 +109,7 @@ model Client {
 model Supplier {
   id              String       @id @default(uuid())
   name            String
+  email           String       @unique
   country         String       @default("CN")
   defaultCurrency CurrencyType @default(USD) @map("default_currency")
   incotermDefault IncotermType @default(FOB) @map("incoterm_default")

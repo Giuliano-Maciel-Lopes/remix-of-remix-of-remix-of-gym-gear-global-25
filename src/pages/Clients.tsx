@@ -56,6 +56,7 @@ export default function ClientsPage() {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     country: 'BR',
     default_currency: 'USD' as 'USD' | 'CNY' | 'EUR' | 'BRL' | 'ARS',
     contact_email: '',
@@ -82,6 +83,7 @@ export default function ClientsPage() {
     setFormErrors({});
     setFormData({
       name: '',
+      email: '',
       country: 'BR',
       default_currency: 'USD',
       contact_email: '',
@@ -98,6 +100,7 @@ export default function ClientsPage() {
     setFormErrors({});
     setFormData({
       name: client.name,
+      email: client.email,
       country: client.country,
       default_currency: client.default_currency,
       contact_email: client.contact_email || '',
@@ -148,8 +151,9 @@ export default function ClientsPage() {
     if (!filteredClients?.length) return;
     exportToExcel(filteredClients, [
       { header: 'Nome', accessor: (c) => c.name },
+      { header: 'Email', accessor: (c) => c.email },
       { header: 'País', accessor: (c) => countries.find(co => co.code === c.country)?.name || c.country },
-      { header: 'Email', accessor: (c) => c.contact_email || '-' },
+      { header: 'Email Contato', accessor: (c) => c.contact_email || '-' },
       { header: 'Telefone', accessor: (c) => c.contact_phone || '-' },
       { header: 'Moeda', accessor: (c) => c.default_currency },
       { header: 'Status', accessor: (c) => formatStatus(c.is_active) },
@@ -395,6 +399,18 @@ export default function ClientsPage() {
               <FormError error={formErrors.name} />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@empresa.com"
+              />
+              <FormError error={formErrors.email} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="country">País</Label>
@@ -473,7 +489,7 @@ export default function ClientsPage() {
             </Button>
             <Button 
               onClick={handleSave}
-              disabled={!formData.name || createClient.isPending || updateClient.isPending}
+              disabled={!formData.name || !formData.email || createClient.isPending || updateClient.isPending}
             >
               {createClient.isPending || updateClient.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
