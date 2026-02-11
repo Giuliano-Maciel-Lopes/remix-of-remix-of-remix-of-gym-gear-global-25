@@ -4,6 +4,7 @@
 
 import { catalogRepository } from './catalog.repository.js';
 import { AppError } from '../../shared/middleware/errorHandler.js';
+import prisma from '../../shared/prisma.js';
 import type { CreateCatalogItemInput, UpdateCatalogItemInput } from './catalog.schemas.js';
 
 const categoryReverseMap: Record<string, string> = {
@@ -106,6 +107,18 @@ export class CatalogService {
   async delete(id: string, soft = true) {
     const existing = await catalogRepository.findById(id);
     if (!existing) throw new AppError(404, 'Item do catálogo não encontrado');
+
+    if (!soft) {
+      // Check for related records before hard delete
+      const [pricesCount, quoteLinesCount] = await Promise.all([
+        prisma.supplierPrice.count({ where: { catalogItemId: id } }),
+        prisma.quoteLine.count({ where: { catalogItemId: id } }),
+      ]);
+
+      if (pricesCount > 0 || quoteLinesCount > 0) {
+        throw new AppError(400, 'Não é possível excluir este item pois ele está vinculado a outros dados.', 'HAS_DEPENDENCIES');
+      }
+    }
 
     if (soft) {
       await catalogRepository.softDelete(id);

@@ -16,6 +16,10 @@ const compareSchema = z.object({
   fixed_costs_usd: z.number().min(0),
 });
 
+const changeClientSchema = z.object({
+  client_id: z.string().uuid(),
+});
+
 export class QuoteController {
   async getAll(req: Request, res: Response, next: NextFunction) {
     try {
@@ -63,6 +67,17 @@ export class QuoteController {
       const { id } = quoteIdSchema.parse(req.params);
       await quoteService.delete(id);
       res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async changeClient(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = quoteIdSchema.parse(req.params);
+      const { client_id } = changeClientSchema.parse(req.body);
+      const quote = await quoteService.changeClient(id, client_id);
+      res.json(quote);
     } catch (error) {
       next(error);
     }

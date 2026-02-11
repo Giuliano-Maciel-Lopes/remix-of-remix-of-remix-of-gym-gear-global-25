@@ -495,6 +495,23 @@ export function useDeleteQuoteLine() {
   });
 }
 
+export function useChangeQuoteClient() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ quoteId, clientId }: { quoteId: string; clientId: string }) =>
+      quotesApi.changeClient(quoteId, clientId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      toast({ title: 'Cliente do pedido alterado com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao alterar cliente', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // Aliases for backward compatibility
 export const useQuoteWithLines = useQuote;
 export const useCreateQuoteLine = useAddQuoteLine;

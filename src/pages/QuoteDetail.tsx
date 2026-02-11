@@ -21,7 +21,8 @@ import {
   Building2,
   Clock,
   Plus,
-  Trash2
+  Trash2,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, CountryBadge, ContainerBadge, CategoryBadge } from '@/components/common/StatusBadge';
@@ -32,7 +33,9 @@ import {
   useSupplierPrices,
   useCreateQuoteLine,
   useDeleteQuoteLine,
-  useUpdateQuote
+  useUpdateQuote,
+  useClients,
+  useChangeQuoteClient
 } from '@/hooks/useApiQuery';
 import { 
   formatCurrency, 
@@ -64,6 +67,8 @@ export default function QuoteDetailPage() {
   const { isAdmin } = useAuth();
   
   const [showAddLineDialog, setShowAddLineDialog] = useState(false);
+  const [showChangeClientDialog, setShowChangeClientDialog] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [lineFormData, setLineFormData] = useState({
     catalog_item_id: '',
     chosen_supplier_id: '',
@@ -75,10 +80,12 @@ export default function QuoteDetailPage() {
   const { data: catalogItems } = useCatalogItems();
   const { data: suppliers } = useSuppliers();
   const { data: prices } = useSupplierPrices();
+  const { data: clients } = useClients();
   
   const createLine = useCreateQuoteLine();
   const deleteLine = useDeleteQuoteLine();
   const updateQuote = useUpdateQuote();
+  const changeClient = useChangeQuoteClient();
 
   if (loadingQuote) {
     return (
@@ -162,6 +169,14 @@ export default function QuoteDetailPage() {
     await updateQuote.mutateAsync({ id: quote.id, status });
   };
 
+  // Change client
+  const handleChangeClient = async () => {
+    if (!selectedClientId) return;
+    await changeClient.mutateAsync({ quoteId: quote.id, clientId: selectedClientId });
+    setShowChangeClientDialog(false);
+    setSelectedClientId('');
+  };
+
   // Get line details from backend calculations
   const getLineDetails = (line: typeof lines[0]) => {
     const calcLine = calc?.lines?.find(cl => cl.catalog_item_id === line.catalog_item_id && cl.supplier_id === line.chosen_supplier_id);
@@ -197,6 +212,12 @@ export default function QuoteDetailPage() {
               <StatusBadge status={quote.status} />
               <CountryBadge country={quote.destination_country} />
               <ContainerBadge type={quote.container_type} />
+              {quote.client && (
+                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  {quote.client.name}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -217,6 +238,13 @@ export default function QuoteDetailPage() {
               </Button>
             </>
           )}
+          <Button variant="outline" size="sm" onClick={() => {
+            setSelectedClientId(quote.client_id || '');
+            setShowChangeClientDialog(true);
+          }}>
+            <Users className="w-4 h-4 mr-2" />
+            Alterar Cliente
+          </Button>
           <Button variant="outline" size="sm">
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             Google Sheet
@@ -598,6 +626,49 @@ export default function QuoteDetailPage() {
               }
             >
               {createLine.isPending ? 'Adicionando...' : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Client Dialog */}
+      <Dialog open={showChangeClientDialog} onOpenChange={setShowChangeClientDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Cliente</DialogTitle>
+            <DialogDescription>
+              Selecione o novo cliente para este pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Label>Cliente</Label>
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um cliente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clients?.filter(c => c.is_active).map(client => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeClientDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleChangeClient}
+              disabled={!selectedClientId || changeClient.isPending}
+            >
+              {changeClient.isPending ? 'Salvando...' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>

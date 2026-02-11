@@ -4,6 +4,7 @@
 
 import { supplierRepository } from './supplier.repository.js';
 import { AppError } from '../../shared/middleware/errorHandler.js';
+import prisma from '../../shared/prisma.js';
 import type { CreateSupplierInput, UpdateSupplierInput } from './supplier.schemas.js';
 
 export class SupplierService {
@@ -77,6 +78,7 @@ export class SupplierService {
     return {
       id: supplier.id,
       name: supplier.name,
+      supplier: supplier.country,
       country: supplier.country,
       default_currency: supplier.defaultCurrency,
       incoterm_default: supplier.incotermDefault,
@@ -93,6 +95,19 @@ export class SupplierService {
   async delete(id: string, soft = true) {
     const existing = await supplierRepository.findById(id);
     if (!existing) throw new AppError(404, 'Fornecedor não encontrado');
+
+    if (!soft) {
+      // Check for related records before hard delete
+      const [pricesCount, mappingsCount, quoteLinesCount] = await Promise.all([
+        prisma.supplierPrice.count({ where: { supplierId: id } }),
+        prisma.skuMapping.count({ where: { supplierId: id } }),
+        prisma.quoteLine.count({ where: { chosenSupplierId: id } }),
+      ]);
+
+      if (pricesCount > 0 || mappingsCount > 0 || quoteLinesCount > 0) {
+        throw new AppError(400, 'Não é possível excluir este fornecedor pois ele está vinculado a outros dados.', 'HAS_DEPENDENCIES');
+      }
+    }
 
     if (soft) {
       await supplierRepository.softDelete(id);

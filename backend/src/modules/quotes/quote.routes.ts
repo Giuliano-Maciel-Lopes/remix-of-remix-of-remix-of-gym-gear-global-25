@@ -21,6 +21,9 @@ router.put('/:id', (req, res, next) => quoteController.update(req, res, next));
 router.patch('/:id', (req, res, next) => quoteController.update(req, res, next));
 router.delete('/:id', (req, res, next) => quoteController.delete(req, res, next));
 
+// Change client
+router.patch('/:id/change-client', (req, res, next) => quoteController.changeClient(req, res, next));
+
 // Quote lines
 router.post('/:id/lines', (req, res, next) => quoteController.addLine(req, res, next));
 router.put('/:id/lines/:lineId', (req, res, next) => quoteController.updateLine(req, res, next));

@@ -45,8 +45,9 @@ async function request<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.error || `HTTP Error: ${response.status}`);
+    const error = new Error(errorData.message || errorData.error || `HTTP Error: ${response.status}`);
     (error as any).status = response.status;
+    (error as any).code = errorData.code;
     (error as any).details = errorData.details;
     throw error;
   }
@@ -460,6 +461,12 @@ export const quotesApi = {
     request<CompareResult[]>('/quotes/compare', {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+
+  changeClient: (quoteId: string, clientId: string) =>
+    request<Quote>(`/quotes/${quoteId}/change-client`, {
+      method: 'PATCH',
+      body: JSON.stringify({ client_id: clientId }),
     }),
 };
 
