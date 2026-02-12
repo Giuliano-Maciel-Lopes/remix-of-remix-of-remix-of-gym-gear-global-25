@@ -41,7 +41,9 @@ export class ImportController {
             contactEmail,
             country: String(row['País'] || row['country'] || 'BR').trim(),
             defaultCurrency: (row['Moeda'] || row['default_currency'] || 'USD') as any,
-            contactPhone: row['Telefone'] || row['contact_phone'] || null,
+           contactPhone: row['Telefone'] || row['contact_phone']
+  ? String(row['Telefone'] || row['contact_phone']).trim()
+  : null,
             notes: row['Observações'] || row['notes'] || null,
             isActive: true,
           },
@@ -85,7 +87,7 @@ export class ImportController {
           countSkipped++;
           continue;
         }
-
+       const rawPhone = row['Telefone'] ?? row['contact_phone'] ?? null;
         await prisma.supplier.create({
           data: {
             name: String(row['Nome'] || row['name'] || '').trim(),
@@ -94,7 +96,7 @@ export class ImportController {
             defaultCurrency: (row['Moeda'] || row['default_currency'] || 'USD') as any,
             incotermDefault: (row['Incoterm'] || row['incoterm_default'] || 'FOB') as any,
             leadTimeDays: Number(row['Lead Time'] || row['lead_time_days'] || 45),
-            contactPhone: row['Telefone'] || row['contact_phone'] || null,
+           contactPhone: rawPhone ? String(rawPhone).trim() : null,
             notes: row['Observações'] || row['notes'] || null,
             isActive: true,
           },
