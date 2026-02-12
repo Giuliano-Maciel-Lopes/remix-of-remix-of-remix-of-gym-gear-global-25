@@ -92,10 +92,9 @@ model UserRole {
 model Client {
   id              String       @id @default(uuid())
   name            String
-  email           String       @unique
   country         String       @default("BR")
   defaultCurrency CurrencyType @default(USD) @map("default_currency")
-  contactEmail    String?      @map("contact_email")
+  contactEmail    String       @unique @map("contact_email")
   contactPhone    String?      @map("contact_phone")
   notes           String?
   isActive        Boolean      @default(true) @map("is_active")
@@ -109,12 +108,11 @@ model Client {
 model Supplier {
   id              String       @id @default(uuid())
   name            String
-  email           String       @unique
   country         String       @default("CN")
   defaultCurrency CurrencyType @default(USD) @map("default_currency")
   incotermDefault IncotermType @default(FOB) @map("incoterm_default")
   leadTimeDays    Int          @default(45) @map("lead_time_days")
-  contactEmail    String?      @map("contact_email")
+  contactEmail    String       @unique @map("contact_email")
   contactPhone    String?      @map("contact_phone")
   notes           String?
   isActive        Boolean      @default(true) @map("is_active")

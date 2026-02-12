@@ -27,7 +27,6 @@ export class SupplierRepository {
     return prisma.supplier.create({
       data: {
         name: data.name,
-        email: data.email,
         country: data.country || 'CN',
         defaultCurrency: data.default_currency || 'USD',
         incotermDefault: data.incoterm_default || 'FOB',
@@ -45,7 +44,6 @@ export class SupplierRepository {
       where: { id },
       data: {
         name: data.name,
-        email: data.email,
         country: data.country,
         defaultCurrency: data.default_currency,
         incotermDefault: data.incoterm_default,

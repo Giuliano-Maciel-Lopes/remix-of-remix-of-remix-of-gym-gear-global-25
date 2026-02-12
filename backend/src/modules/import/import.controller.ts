@@ -1,7 +1,7 @@
 /**
  * Import Controller
  * Handles Excel file uploads and batch creation
- * Uses email as unique key for clients/suppliers to prevent duplicates
+ * Uses contactEmail as unique key for clients/suppliers to prevent duplicates
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -23,13 +23,13 @@ export class ImportController {
       let countSkipped = 0;
 
       for (const row of data) {
-        const email = String(row['Email'] || row['email'] || '').trim();
-        if (!email) {
+        const contactEmail = String(row['Email'] || row['email'] || row['Email Contato'] || row['contact_email'] || '').trim();
+        if (!contactEmail) {
           countSkipped++;
           continue;
         }
 
-        const existing = await prisma.client.findUnique({ where: { email } });
+        const existing = await prisma.client.findUnique({ where: { contactEmail } });
         if (existing) {
           countSkipped++;
           continue;
@@ -38,10 +38,9 @@ export class ImportController {
         await prisma.client.create({
           data: {
             name: String(row['Nome'] || row['name'] || '').trim(),
-            email,
+            contactEmail,
             country: String(row['País'] || row['country'] || 'BR').trim(),
             defaultCurrency: (row['Moeda'] || row['default_currency'] || 'USD') as any,
-            contactEmail: row['Email Contato'] || row['contact_email'] || null,
             contactPhone: row['Telefone'] || row['contact_phone'] || null,
             notes: row['Observações'] || row['notes'] || null,
             isActive: true,
@@ -75,13 +74,13 @@ export class ImportController {
       let countSkipped = 0;
 
       for (const row of data) {
-        const email = String(row['Email'] || row['email'] || '').trim();
-        if (!email) {
+        const contactEmail = String(row['Email'] || row['email'] || row['Email Contato'] || row['contact_email'] || '').trim();
+        if (!contactEmail) {
           countSkipped++;
           continue;
         }
 
-        const existing = await prisma.supplier.findUnique({ where: { email } });
+        const existing = await prisma.supplier.findUnique({ where: { contactEmail } });
         if (existing) {
           countSkipped++;
           continue;
@@ -90,12 +89,11 @@ export class ImportController {
         await prisma.supplier.create({
           data: {
             name: String(row['Nome'] || row['name'] || '').trim(),
-            email,
+            contactEmail,
             country: String(row['País'] || row['country'] || 'CN').trim(),
             defaultCurrency: (row['Moeda'] || row['default_currency'] || 'USD') as any,
             incotermDefault: (row['Incoterm'] || row['incoterm_default'] || 'FOB') as any,
             leadTimeDays: Number(row['Lead Time'] || row['lead_time_days'] || 45),
-            contactEmail: row['Email Contato'] || row['contact_email'] || null,
             contactPhone: row['Telefone'] || row['contact_phone'] || null,
             notes: row['Observações'] || row['notes'] || null,
             isActive: true,
@@ -163,8 +161,8 @@ export class ImportController {
       let countSkipped = 0;
 
       for (const row of data) {
-        // Lookup supplier by email
-        const supplierEmail = String(row['Email Fornecedor'] || row['supplier_email'] || '').trim();
+        // Lookup supplier by contactEmail
+        const supplierEmail = String(row['Email Fornecedor'] || row['supplier_email'] || row['Email'] || row['email'] || '').trim();
         const itemSku = String(row['SKU'] || row['sku'] || row['catalog_item_sku'] || '').trim();
 
         if (!supplierEmail || !itemSku) {
@@ -172,7 +170,7 @@ export class ImportController {
           continue;
         }
 
-        const supplier = await prisma.supplier.findUnique({ where: { email: supplierEmail } });
+        const supplier = await prisma.supplier.findUnique({ where: { contactEmail: supplierEmail } });
         const catalogItem = await prisma.catalogItem.findUnique({ where: { sku: itemSku } });
 
         if (!supplier || !catalogItem) {

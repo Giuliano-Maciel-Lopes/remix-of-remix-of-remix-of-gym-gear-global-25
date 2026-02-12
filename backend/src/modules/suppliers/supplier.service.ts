@@ -14,7 +14,6 @@ export class SupplierService {
     return suppliers.map(s => ({
       id: s.id,
       name: s.name,
-      email: s.email,
       country: s.country,
       default_currency: s.defaultCurrency,
       incoterm_default: s.incotermDefault,
@@ -38,7 +37,6 @@ export class SupplierService {
     return {
       id: supplier.id,
       name: supplier.name,
-      email: supplier.email,
       country: supplier.country,
       default_currency: supplier.defaultCurrency,
       incoterm_default: supplier.incotermDefault,
@@ -58,7 +56,6 @@ export class SupplierService {
     return {
       id: supplier.id,
       name: supplier.name,
-      email: supplier.email,
       country: supplier.country,
       default_currency: supplier.defaultCurrency,
       incoterm_default: supplier.incotermDefault,
@@ -81,8 +78,6 @@ export class SupplierService {
     return {
       id: supplier.id,
       name: supplier.name,
-      email: supplier.email,
-      supplier: supplier.country,
       country: supplier.country,
       default_currency: supplier.defaultCurrency,
       incoterm_default: supplier.incotermDefault,

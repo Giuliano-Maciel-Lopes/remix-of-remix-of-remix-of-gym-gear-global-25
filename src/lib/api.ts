@@ -97,10 +97,9 @@ export const authApi = {
 export interface Client {
   id: string;
   name: string;
-  email: string;
   country: string;
   default_currency: 'USD' | 'CNY' | 'EUR' | 'BRL' | 'ARS';
-  contact_email?: string | null;
+  contact_email: string;
   contact_phone?: string | null;
   notes?: string | null;
   is_active: boolean;
@@ -140,12 +139,11 @@ export const clientsApi = {
 export interface Supplier {
   id: string;
   name: string;
-  email: string;
   country: string;
   default_currency: 'USD' | 'CNY' | 'EUR' | 'BRL' | 'ARS';
   incoterm_default: 'FOB' | 'CIF' | 'EXW' | 'DDP';
   lead_time_days: number;
-  contact_email?: string | null;
+  contact_email: string;
   contact_phone?: string | null;
   notes?: string | null;
   is_active: boolean;
