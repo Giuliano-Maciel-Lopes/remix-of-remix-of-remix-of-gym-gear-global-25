@@ -174,7 +174,7 @@ export default function SupplierPricesPage() {
       { header: 'Item', accessor: (p) => getCatalogItemById(p.catalog_item_id)?.name || '-' },
       { header: 'SKU', accessor: (p) => getCatalogItemById(p.catalog_item_id)?.sku || '-' },
       { header: 'Fornecedor', accessor: (p) => getSupplierById(p.supplier_id)?.name || '-' },
-      { header: 'Email Fornecedor', accessor: (p) => getSupplierById(p.supplier_id)?.email || '-' },
+      { header: 'Email Fornecedor', accessor: (p) => getSupplierById(p.supplier_id)?.contact_email || '-' },
       { header: 'Preço FOB (USD)', accessor: (p) => Number(p.price_fob_usd) },
       { header: 'Moeda Original', accessor: (p) => p.currency_original },
       { header: 'Preço Original', accessor: (p) => Number(p.price_original) },

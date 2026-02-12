@@ -6,10 +6,9 @@ import { z } from 'zod';
 
 export const clientSchema = z.object({
   name: z.string().trim().min(1, 'Nome é obrigatório').max(100, 'Nome deve ter no máximo 100 caracteres'),
-  email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   country: z.string().min(1, 'País é obrigatório'),
   default_currency: z.enum(['USD', 'CNY', 'EUR', 'BRL', 'ARS']),
-  contact_email: z.string().email('Email inválido').or(z.literal('')).optional(),
+  contact_email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   contact_phone: z.string().max(30, 'Telefone deve ter no máximo 30 caracteres').optional(),
   notes: z.string().max(500, 'Observações devem ter no máximo 500 caracteres').optional(),
   is_active: z.boolean(),
@@ -17,12 +16,11 @@ export const clientSchema = z.object({
 
 export const supplierSchema = z.object({
   name: z.string().trim().min(1, 'Nome é obrigatório').max(100, 'Nome deve ter no máximo 100 caracteres'),
-  email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   country: z.string().min(1, 'País é obrigatório'),
   default_currency: z.enum(['USD', 'CNY', 'EUR']),
   incoterm_default: z.enum(['FOB', 'CIF', 'EXW', 'DDP']),
   lead_time_days: z.number().int().min(1, 'Lead time deve ser pelo menos 1 dia').max(365, 'Lead time máximo: 365 dias'),
-  contact_email: z.string().email('Email inválido').or(z.literal('')).optional(),
+  contact_email: z.string().email('Email inválido').min(1, 'Email é obrigatório'),
   contact_phone: z.string().max(30).optional(),
   notes: z.string().max(500).optional(),
   is_active: z.boolean(),

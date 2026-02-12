@@ -56,7 +56,6 @@ export default function ClientsPage() {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     country: 'BR',
     default_currency: 'USD' as 'USD' | 'CNY' | 'EUR' | 'BRL' | 'ARS',
     contact_email: '',
@@ -83,7 +82,6 @@ export default function ClientsPage() {
     setFormErrors({});
     setFormData({
       name: '',
-      email: '',
       country: 'BR',
       default_currency: 'USD',
       contact_email: '',
@@ -100,10 +98,9 @@ export default function ClientsPage() {
     setFormErrors({});
     setFormData({
       name: client.name,
-      email: client.email,
       country: client.country,
       default_currency: client.default_currency,
-      contact_email: client.contact_email || '',
+      contact_email: client.contact_email,
       contact_phone: client.contact_phone || '',
       notes: client.notes || '',
       is_active: client.is_active,
@@ -151,9 +148,8 @@ export default function ClientsPage() {
     if (!filteredClients?.length) return;
     exportToExcel(filteredClients, [
       { header: 'Nome', accessor: (c) => c.name },
-      { header: 'Email', accessor: (c) => c.email },
+      { header: 'Email', accessor: (c) => c.contact_email },
       { header: 'País', accessor: (c) => countries.find(co => co.code === c.country)?.name || c.country },
-      { header: 'Email Contato', accessor: (c) => c.contact_email || '-' },
       { header: 'Telefone', accessor: (c) => c.contact_phone || '-' },
       { header: 'Moeda', accessor: (c) => c.default_currency },
       { header: 'Status', accessor: (c) => formatStatus(c.is_active) },
@@ -188,12 +184,10 @@ export default function ClientsPage() {
       header: 'Contato',
       accessor: (client) => (
         <div className="text-sm space-y-1">
-          {client.contact_email && (
-            <p className="flex items-center gap-1.5 text-muted-foreground">
+    <p className="flex items-center gap-1.5 text-muted-foreground">
               <Mail className="w-3.5 h-3.5" />
               {client.contact_email}
             </p>
-          )}
           {client.contact_phone && (
             <p className="flex items-center gap-1.5 text-muted-foreground">
               <Phone className="w-3.5 h-3.5" />
@@ -280,7 +274,7 @@ export default function ClientsPage() {
     return (
       client.name.toLowerCase().includes(query) ||
       client.country.toLowerCase().includes(query) ||
-      (client.contact_email?.toLowerCase().includes(query) ?? false) ||
+      client.contact_email.toLowerCase().includes(query) ||
       (client.notes?.toLowerCase().includes(query) ?? false)
     );
   };
@@ -400,15 +394,15 @@ export default function ClientsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="contact_email">Email *</Label>
               <Input
-                id="email"
+                id="contact_email"
                 type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(f => ({ ...f, email: e.target.value }))}
+                value={formData.contact_email}
+                onChange={(e) => setFormData(f => ({ ...f, contact_email: e.target.value }))}
                 placeholder="email@empresa.com"
               />
-              <FormError error={formErrors.email} />
+              <FormError error={formErrors.contact_email} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -450,18 +444,6 @@ export default function ClientsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.contact_email}
-                onChange={(e) => setFormData(f => ({ ...f, contact_email: e.target.value }))}
-                placeholder="email@empresa.com"
-              />
-              <FormError error={formErrors.contact_email} />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="phone">Telefone</Label>
               <Input
                 id="phone"
@@ -489,7 +471,7 @@ export default function ClientsPage() {
             </Button>
             <Button 
               onClick={handleSave}
-              disabled={!formData.name || !formData.email || createClient.isPending || updateClient.isPending}
+              disabled={!formData.name || !formData.contact_email || createClient.isPending || updateClient.isPending}
             >
               {createClient.isPending || updateClient.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
